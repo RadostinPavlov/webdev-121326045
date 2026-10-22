@@ -12,3 +12,15 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Changed by hand:
 
 -->
+
+Lecture 6: What the agent built, part 2
+
+  Topics:
+   - Components
+   - State
+   - SSR/CSR
+   - Containers
+   - CI
+   - Environments
+
+   
