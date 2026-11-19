@@ -4,18 +4,19 @@ Read this file at the start of every session. Keep it short and correct; update 
 
 ## Project
 <!-- One or two sentences: what the app does and for whom. Link SPEC.md. -->
-See `SPEC.md` for goals, non-goals and acceptance criteria.
+ClubEvents is a web app for club members to discover events, register for or cancel attendance, and get AI-assisted event information. Organizers use it to create and manage events and track capacity and attendees; see `SPEC.md` for goals, non-goals and acceptance criteria.
 
 ## Commands
 <!-- How to install, run, test. Keep these exact and working. -->
-- Install: 
-- Run: 
-- Test: 
-- Coverage: 
-- MCP server: 
+- Install: npm install
+- Run: npm start
+- Test: npm test
+- Coverage:
+- MCP server: npm run --silent mcp
 
 ## Conventions
-<!-- Folder layout, naming, where business rules live, how errors are returned to the client. -->
+- Code lives in `src/`: `routes/` reads requests and returns status codes, `services/` holds all business rules (capacity, roles, ownership), `db/` is the only place with SQL, and `public/` holds the HTML, CSS and JS for the UI.
+- Errors go to the client as JSON `{ "error": "message" }` with the matching status code: 400 bad input, 401 not signed in, 403 not allowed, 404 not found, 409 conflict (for example an event that is full).
 
 ## Layers
 <!-- Fill in the file or folder for each layer. -->
@@ -30,7 +31,7 @@ that talks to the database directly is a second, unguarded way into your data: n
 
 ## The model feature
 <!-- Provider, env var, and the call site. -->
-- The provider is named in exactly one file: 
+- The provider is named in exactly one file:
 - The key comes from an environment variable and is never committed or logged.
 - Every call has a timeout and a deterministic fallback, so the app still works when the provider is down or rate-limited.
 - The model's output is re-checked against real data before anything is saved or shown.
