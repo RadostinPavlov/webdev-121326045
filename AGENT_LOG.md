@@ -55,8 +55,9 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Went wrong: Auto mode picked models with no quota left (gemini-3.1-pro-preview, gemini-3.8-flash); switched manually to gemini-3-flash-preview
 - Changed by hand: nothing
 
-Went wrong: the agent tried to cat .env, which would send its values to the model
-Changed by hand: refused and told it the variable names only
-
-Went wrong: the agent used ES modules, which would have broken mcp-server/server.js (CommonJS); schema.sql had an ALTER TABLE that fails on a second run
-Changed by hand: asked for CommonJS and an idempotent schema
+## 2026-11-20 · Slice 1: plan, schema, sign-in
+- Goal: plan Slice 1 and build it in three steps (schema and seed, sign-in, events list)
+- Delegated: the plan, then src/db (schema, seed, setup), auth routes and service, server.js and the login page
+- Checkpoints: reviewed the plan and asked for a sessions table, a rerunnable db:setup, server-side protection of /events and src/server.js; after step 1 checked 3 events, a hashed password, a second db:setup run and check.mjs 12/12
+- Went wrong: the agent tried to cat .env (would send its values to the model); wrote ES modules, which would break mcp-server/server.js (CommonJS); used psql, which is not installed; schema.sql had an ALTER TABLE that fails on a second run; ran db:setup before npm install; auth.service.js writes SQL directly (breaks the layering in AGENTS.md) and compares hashes with ===; hit the usage limit for every model before step 2 was checked
+- Changed by hand: refused cat .env and the first db.js and package.json; asked for CommonJS, a Node setup script, an idempotent schema and npm install
