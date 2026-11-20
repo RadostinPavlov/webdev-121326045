@@ -14,6 +14,11 @@ By the end you hand in one working application: a backend and a frontend over a 
 
 The course setup page explains accounts, sign-in, free limits and what to do if something goes wrong.
 
+## Seed Account
+For testing and development, you can use the following seeded account:
+- **Email**: `member@example.com`
+- **Password**: `password123`
+
 ## What is already here
 
 | Path | What it is for |

@@ -34,10 +34,29 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Went wrong: nothing; the model still chose `find_lecture` with the vague description
 - Changed by hand: changed and then reverted the `find_lecture` description; fixed the lecture range from 1–12 to 1–10
 
-
 ## 2026-11-19 · Usage limit
 - Goal: check that the agent reads AGENTS.md ("Always ask before"), then plan Slice 1
 - Delegated: asked what AGENTS.md says under "Always ask before"
 - Checkpoints: none reached; the main model never answered
 - Went wrong: hit the usage limit for the Pro models, switched to gemini-3-flash-preview, then hit the limit for gemini-3.8-flash; 20 requests to the main model were refused and no tool was called
 - Changed by hand: nothing
+
+## 2026-11-20 · Usage limit again
+- Goal: check that the agent reads AGENTS.md ("Always ask before")
+- Delegated: asked what AGENTS.md says under "Always ask before"
+- Checkpoints: none reached
+- Went wrong: the API key still had no quota for gemini-3.8-flash; 9 requests to the main model were refused, no tool was called
+- Changed by hand: nothing; decided to switch from the API key to Google sign-in
+
+## 2026-11-20 · AGENTS.md check
+- Goal: confirm the agent reads AGENTS.md at the start of a session
+- Delegated: asked what AGENTS.md says under "Always ask before"
+- Checkpoints: the agent listed all nine lines correctly
+- Went wrong: Auto mode picked models with no quota left (gemini-3.1-pro-preview, gemini-3.8-flash); switched manually to gemini-3-flash-preview
+- Changed by hand: nothing
+
+Went wrong: the agent tried to cat .env, which would send its values to the model
+Changed by hand: refused and told it the variable names only
+
+Went wrong: the agent used ES modules, which would have broken mcp-server/server.js (CommonJS); schema.sql had an ALTER TABLE that fails on a second run
+Changed by hand: asked for CommonJS and an idempotent schema

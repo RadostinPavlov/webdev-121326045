@@ -7,7 +7,9 @@
     "doc": "docs"
   },
   "scripts": {
+    "start": "node src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "db:setup": "node src/db/setup.js",
     "mcp": "node mcp-server/server.js"
   },
   "repository": {
@@ -20,5 +22,12 @@
   "bugs": {
     "url": "https://github.com/RadostinPavlov/webdev-121326045/issues"
   },
-  "homepage": "https://github.com/RadostinPavlov/webdev-121326045#readme"
+  "homepage": "https://github.com/RadostinPavlov/webdev-121326045#readme",
+  "dependencies": {
+    "connect-pg-simple": "^10.0.0",
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "express-session": "^1.19.0",
+    "pg": "^8.23.1"
+  }
 }
