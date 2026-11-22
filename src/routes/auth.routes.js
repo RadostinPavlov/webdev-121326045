@@ -12,8 +12,14 @@ router.post('/login', async (req, res) => {
     try {
         const user = await authService.login(email, password);
         if (user) {
-            req.session.user = user;
-            return res.json({ message: 'Logged in successfully', user });
+            return req.session.regenerate((err) => {
+                if (err) {
+                    console.error('Session regeneration error:', err);
+                    return res.status(500).json({ error: 'Internal server error' });
+                }
+                req.session.user = user;
+                return res.json({ message: 'Logged in successfully', user });
+            });
         } else {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
