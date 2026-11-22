@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClubEvents - Events</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .event-card { border: 1px solid #ccc; padding: 1rem; margin-bottom: 1rem; border-radius: 4px; }
+        .event-title { font-size: 1.25rem; font-weight: bold; }
+        .event-details { color: #666; margin-top: 0.5rem; }
+        button { cursor: pointer; padding: 0.5rem 1rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Upcoming Events</h1>
+        <button id="logoutBtn">Sign Out</button>
+    </header>
+
+    <div id="eventsList">
+        <p>Loading events...</p>
+    </div>
+
+    <script>
+        async function loadEvents() {
+            try {
+                const response = await fetch('/api/events');
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!response.ok) throw new Error('Failed to fetch events');
+                
+                const events = await response.json();
+                const container = document.getElementById('eventsList');
+                
+                if (events.length === 0) {
+                    container.innerHTML = '<p>No upcoming events.</p>';
+                    return;
+                }
+
+                container.innerHTML = events.map(event => `
+                    <div class="event-card">
+                        <div class="event-title">${event.title}</div>
+                        <div class="event-details">
+                            Date: ${new Date(event.date).toLocaleString()}<br>
+                            Free places: ${event.free_places} / ${event.capacity}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                document.getElementById('eventsList').innerHTML = '<p>Error loading events.</p>';
+                console.error(err);
+            }
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/auth/logout', { method: 'POST' });
+                if (response.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (err) {
+                console.error('Logout failed:', err);
+            }
+        });
+
+        loadEvents();
+    </script>
+</body>
+</html>

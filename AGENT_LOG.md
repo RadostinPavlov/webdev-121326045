@@ -61,3 +61,11 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Checkpoints: reviewed the plan and asked for a sessions table, a rerunnable db:setup, server-side protection of /events and src/server.js; after step 1 checked 3 events, a hashed password, a second db:setup run and check.mjs 12/12
 - Went wrong: the agent tried to cat .env (would send its values to the model); wrote ES modules, which would break mcp-server/server.js (CommonJS); used psql, which is not installed; schema.sql had an ALTER TABLE that fails on a second run; ran db:setup before npm install; auth.service.js writes SQL directly (breaks the layering in AGENTS.md) and compares hashes with ===; hit the usage limit for every model before step 2 was checked
 - Changed by hand: refused cat .env and the first db.js and package.json; asked for CommonJS, a Node setup script, an idempotent schema and npm install
+
+
+## 2026-11-22 · Slice 1: auth fixes and events list
+- Goal: fix the auth code from the last session and build step 3, the events list screen
+- Delegated: move the users SQL to src/db/user.db.js, shared password helpers with timingSafeEqual, session regenerate on sign-in; then the events list (event.db.js, event.service.js, GET /api/events, src/views/events.html, sign-out button)
+- Checkpoints: curl for sign-in (200 and Set-Cookie), wrong password (401), /events without a session (302 to /login), check.mjs 12/12; reviewed the events SQL; signed in in the browser and saw the three seeded events; deleted the Yoga event in the database and it disappeared on reload (AC-11)
+- Went wrong: free_places came back as text because pg returns COUNT as a string; there was no route for /, so the app opened on "Cannot GET /"; db:setup kept old sessions while recreating users with new ids, so a signed-in browser pointed at a user that no longer existed; hit the usage limit for every model before the last fix
+- Changed by hand: added AC-12 for the root URL to SPEC.md; after the usage limit, changed the TRUNCATE in seed.js to also clear "session" and RESTART IDENTITY

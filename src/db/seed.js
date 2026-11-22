@@ -7,7 +7,7 @@ async function seed() {
         await client.query('BEGIN');
 
         // Clear existing data
-        await client.query('TRUNCATE users, events, registrations CASCADE');
+        await client.query('TRUNCATE users, events, registrations, "session" RESTART IDENTITY CASCADE');
 
         // Seed user
         const passwordHash = await hashPassword('password123');

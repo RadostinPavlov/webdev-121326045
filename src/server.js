@@ -28,17 +28,24 @@ app.use(session({
 
 // Routes
 const authRoutes = require('./routes/auth.routes');
+const eventRoutes = require('./routes/event.routes');
+
 app.use('/api/auth', authRoutes);
+app.use('/api/events', eventRoutes);
 
 // Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Fallback for protected pages in this slice
+app.get('/', (req, res) => {
+    res.redirect('/events');
+});
+
+// Protected pages
 app.get('/events', (req, res) => {
     if (!req.session.user) {
         return res.redirect('/login');
     }
-    res.sendFile(path.join(__dirname, 'public', 'events.html'));
+    res.sendFile(path.join(__dirname, 'views', 'events.html'));
 });
 
 app.get('/login', (req, res) => {

@@ -87,6 +87,7 @@ Club events
 - [AC-9] A visitor who opens `/events` without signing in lands on `/login` instead.
 - [AC-10] After signing in with a seeded account, `/events` shows the three seeded events, each with its title, date and number of free places.
 - [AC-11] Deleting one event row in the database and reloading `/events` removes that event from the screen.
+- [AC-12] A visitor who opens the app's root URL `/` is sent to `/events`, and from there to `/login` when not signed in.
 
 ## Traceability
 <!-- Filled in from Exercise 3 onward: each AC id, and the test that names it. -->
@@ -96,3 +97,9 @@ Club events
 
 ## Spec vs result
 <!-- After the agent builds the slice: which criteria passed, which it missed or reinterpreted, and what you changed in this spec because of it. -->
+- AC-9 passed: `/events` without a session returns 302 to `/login`.
+- AC-10 passed: after signing in, `/events` shows the three seeded events with title, date and free places.
+- AC-11 passed: deleting the Yoga event in the database removed it from the page on reload.
+- Missed: the agent added no route for `/`, so the app opened on "Cannot GET /". I added AC-12 to this spec, and the agent added the redirect.
+- Found while checking AC-11: db:setup kept old sessions while recreating users with new ids, so a signed-in browser pointed at a user that no longer existed. The seed now also clears sessions and restarts ids.
+- Reinterpreted: `npm run db:setup` empties and reseeds all tables instead of only adding missing rows, so it must never run against real data.
