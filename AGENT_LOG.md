@@ -95,3 +95,10 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Checkpoints: none reached
 - Went wrong: the API key had no quota left for gemini-3-flash-preview or the Pro models; the request never reached the main model
 - Changed by hand: added four feature-specific lines to "Always ask before" in AGENTS.md; kept the nine template lines because checks/ex2.mjs and the CI spec job check them
+
+## 2026-11-23 · Always-ask test (Copilot)
+- Goal: check that the agent stops before installing a dependency
+- Delegated: switched to GitHub Copilot (agent mode, manual permissions) because Gemini had no quota left; asked it what AGENTS.md says under "Always ask before", then to install dayjs
+- Checkpoints: it listed all 13 lines; before installing it stopped and quoted AGENTS.md ("ask before installing dependencies"); I answered No and dayjs is not in package.json
+- Went wrong: nothing
+- Changed by hand: nothing

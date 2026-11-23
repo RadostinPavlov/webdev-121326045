@@ -14,6 +14,9 @@ One row per agent session. In Gemini CLI, type `/stats` before you quit and copy
 | 2026-11-22 | Gemini CLI | 324924 | 4863 | – | $0.1771 |
 | 2026-11-23 | Gemini CLI | 28542 | 360 | – | $0.0151 |
 | 2026-11-23 | Gemini CLI | 432 | 7 | – | $0.0001 |
+| 2026-11-23 | Copilot | – | – | 2% of monthly included credits used (Copilot Free, cumulative) | |
 
 Price list: Gemini API paid tier (ai.google.dev/gemini-api/docs/pricing), checked 2026-11-19:
 gemini-3.8-flash $0.75 / $3.75; gemini-3.5-flash-lite $0.30 / $2.50; gemini-3-flash-preview $0.50 / $3.00 per 1M input/output. Cached tokens not counted.
+
+Copilot Free shows only the percentage of the monthly included credits, not tokens; each Copilot row records the cumulative percentage after the session, so the difference between rows is that session's share. No list-price cost is given for them.
