@@ -110,6 +110,33 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Checkpoints: reviewed that the rules live in the service, that 401 is in the route before the service and 403 comes from the service, and that nothing unrequested slipped in
 
 ### Final plan
- no jsdom or other new test dependency, the page state logic goes into a pure module tested with node:test; SQL and transactions stay in src/db/ through withEventLock, so the service holds only the rules; migration 002 adds CHECK (capacity > 0) and registrations.created_at instead of only an index, because a constraint in the database still holds if the code has a bug; added tests for AC-9 to AC-12, because every criterion in SPEC.md must trace to a test. Kept two unrequested items: 400 for an invalid id, and the registration state in the event list, which the Cancel button needs.
+Updated Slice 2 plan. Grounded in SPEC.md and AGENTS.md. No files changed.
+
+1. Migrations and seed
+   * Move src/db/schema.sql to src/db/migrations/001_init.sql.
+   * Add 002_event_registration.sql to add CHECK (capacity > 0) on events, add registrations.created_at TIMESTAMPTZ NOT NULL DEFAULT now(), and add an index on registrations(event_id). Keep the existing unique (event_id, user_id) constraint.
+   * Add a migration runner and npm run db:migrate to package.json. Track applied migrations and run numbered files in order, transactionally. Keep db:setup as the migration-then-seed command; its existing seed truncates tables, so it remains destructive.
+   * Extend src/db/seed.js with a second member and one organizer, storing password hashes.
+2. Data layer, service, and routes
+   * Keep all SQL and transactions in src/db/. Provide withEventLock(eventId, fn): it starts a transaction, locks the event row, and supplies the locked event and transaction-scoped data operations to fn. The service checks event existence, date, duplicate registration, and capacity inside that callback before inserting. Concurrent attempts for one event serialize; the unique constraint also prevents duplicate rows.
+   * Refactor src/services/event.service.js to accept injected data functions. It exposes listUpcomingEvents(userId), registerForEvent(eventId, userId), and cancelRegistration(registrationId, userId). Listing includes each member's registration state. Registration returns 404 for a missing event; 409 for a past event ("This event has already started"), an existing registration ("You are already registered"), or full capacity ("This event is full"); success returns "You are registered." Check duplicate registration before capacity. Cancellation returns 404 if missing; the service checks ownership and reports forbidden (mapped to 403 by the route) before deleting.
+   * POST /api/events/:eventId/registrations: 201, 400 invalid ID, 401 no session, 404, 409, 500. DELETE /api/registrations/:registrationId: 200, 400, 401, 403, 404, 500. Session checks happen before the service; unauthenticated requests return JSON 401 without data changes. GET /api/events: 200, 401, 500. /events: 200 signed in, 302 redirect to /login otherwise; a registration attempt receiving API 401 redirects the UI to /login (AC-8).
+3. App, UI, and tests
+   * Split src/server.js: src/app.js builds the Express app with injected services and session configuration; server.js configures production dependencies and listens.
+   * Set npm test to Node's built-in test runner. CI has no database: service tests use in-memory data fakes, while route tests send real HTTP requests to the app with fake data and an in-memory session store.
+   * Put event-list state presentation (loading, event list and buttons, empty, error) in pure src/public/js/events-view.js; test it directly with node:test, with no DOM library or added dependency. The page uses that module and retains loading, "No upcoming events yet. Check back later.", and "Could not load events. Please try again." as distinct states.
+   * test/services/event.service.test.js: AC-1, AC-2, AC-3, AC-13, AC-14, AC-16, AC-17; include a concurrent-capacity case. A fake can test service coordination, but only a PostgreSQL run can verify the actual row lock.
+   * test/routes/event.routes.test.js: AC-1, AC-2, AC-3, AC-8, AC-9, AC-10, AC-11, AC-12, AC-14, AC-15, AC-16, AC-17. Use signed-in and visitor sessions; cover page redirects, the three-event fixture, fresh catalog data after a fake deletion, registration responses, and unchanged data on failure.
+   * test/ui/events.test.js: AC-2, AC-8, AC-13, AC-18, AC-19. Assert registration/cancellation feedback, login redirect behavior, and the exact empty/error messages. Every test title names its AC.
 - Went wrong: the first plan would have needed a DOM library for UI tests and left the transaction placement unclear
+- Changed by hand: –
+
+
+## 2026-11-23 · Slice 2: build (Copilot)
+- Goal: build event registration step by step, committing after each working step
+- Delegated: step 1, migrations (001_init.sql, 002_event_registration.sql, runner, npm run db:migrate, extra seed users); step 2, service tests first, then the service and data functions
+- Checkpoints:
+  - step 1: db:migrate ran twice on a fresh empty database without errors; schema_migrations lists 001 and 002; registrations has created_at, the event_id index and UNIQUE (event_id, user_id); db:setup seeds 3 users and 3 events; check.mjs 12/12, ex2 32/32; committed
+  - step 2: after the service, npm test pass 7, fail 0; service has no SQL; BEGIN and FOR UPDATE are in src/db/event.db.js; tests unchanged; committed
+- Went wrong: schema.sql was left with one line instead of being deleted; the plan promised a concurrent-capacity test in the service tests, but none was written (a fake cannot prove the row lock anyway; FOR UPDATE is in src/db/event.db.js)
 - Changed by hand: –
