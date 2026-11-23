@@ -9,12 +9,20 @@ async function seed() {
         // Clear existing data
         await client.query('TRUNCATE users, events, registrations, "session" RESTART IDENTITY CASCADE');
 
-        // Seed user
+        // Seed users
         const passwordHash = await hashPassword('password123');
-        await client.query(
-            'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)',
-            ['member@example.com', passwordHash, 'member']
-        );
+        const users = [
+            ['member@example.com', 'member'],
+            ['member2@example.com', 'member'],
+            ['organizer@example.com', 'organizer']
+        ];
+
+        for (const [email, role] of users) {
+            await client.query(
+                'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)',
+                [email, passwordHash, role]
+            );
+        }
 
         // Seed events
         const events = [

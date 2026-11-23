@@ -11,7 +11,8 @@ ClubEvents is a web app for club members to discover events, register for or can
 - Install: npm install
 - Run: npm start
 - Test: npm test
-- Database setup: npm run db:setup
+- Database migrations: npm run db:migrate
+- Database setup (migrates, then truncates and reseeds): npm run db:setup
 - Coverage:
 - MCP server: npm run --silent mcp
 

@@ -1,3 +1,4 @@
+-- Initial database schema.
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
@@ -25,7 +26,6 @@ CREATE TABLE IF NOT EXISTS "session" (
   "sid" varchar PRIMARY KEY NOT NULL COLLATE "default",
   "sess" json NOT NULL,
   "expire" timestamp(6) NOT NULL
-)
-WITH (OIDS=FALSE);
+);
 
 CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");

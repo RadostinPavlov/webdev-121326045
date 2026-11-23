@@ -102,3 +102,14 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Checkpoints: it listed all 13 lines; before installing it stopped and quoted AGENTS.md ("ask before installing dependencies"); I answered No and dayjs is not in package.json
 - Went wrong: nothing
 - Changed by hand: nothing
+
+
+## 2026-11-23 · Plan for Slice 2: event registration (Copilot)
+- Goal: a one-page plan before any code
+- Delegated: the plan only, no file changes
+- Checkpoints: reviewed that the rules live in the service, that 401 is in the route before the service and 403 comes from the service, and that nothing unrequested slipped in
+
+### Final plan
+ no jsdom or other new test dependency, the page state logic goes into a pure module tested with node:test; SQL and transactions stay in src/db/ through withEventLock, so the service holds only the rules; migration 002 adds CHECK (capacity > 0) and registrations.created_at instead of only an index, because a constraint in the database still holds if the code has a bug; added tests for AC-9 to AC-12, because every criterion in SPEC.md must trace to a test. Kept two unrequested items: 400 for an invalid id, and the registration state in the event list, which the Cancel button needs.
+- Went wrong: the first plan would have needed a DOM library for UI tests and left the transaction placement unclear
+- Changed by hand: –
