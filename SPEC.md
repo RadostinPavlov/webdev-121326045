@@ -22,10 +22,12 @@ Club events
 - No payments: every event is free.
 - No email or push notifications: members check the site.
 - No mobile app: one web UI that also works on a phone screen.
+- No cancellation deadline: a member can cancel their registration any time before the event.
 
 ## Constraints
 - Node with Express, PostgreSQL, plain HTML and JavaScript in the UI.
 - Passwords are stored only as a hash, never as readable text.
+- Capacity is never exceeded, even when two members register for the last place at the same time.
 
 ## The model feature
 <!-- Which model, which modality, and what it does for a user.
@@ -74,9 +76,9 @@ Club events
 <!-- Every criterion carries an id. A test proves it by naming that id in its title, for example
      test('AC-3 a booking that overlaps another is refused with 409', ...).
      Say who acts, what they see, and what must be true in the database. -->
-- [AC-1] A member opens the details page of an event with no free places and presses **Register**, sees "This event is full", and no new row appears in `registrations`.
+- [AC-1] A member opens the details page of an event with no free places and presses **Register**, receives 409 and sees "This event is full", and no new row appears in `registrations`.
 - [AC-2] A member opens the details page of an event with free places and presses **Register**, sees "You are registered", and a row for that member and event appears in `registrations`.
-- [AC-3] A member who is already registered opens the event's details page and presses **Register** again, sees "You are already registered", and only one row for that member and event remains in `registrations`.
+- [AC-3] A member who is already registered opens the event's details page and presses **Register** again, receives 409 and sees "You are already registered", and only one row for that member and event remains in `registrations`.
 - [AC-4] An organizer creates an event with a title, date and capacity, sees it in the event list, and a matching row appears in `events`.
 - [AC-5] An organizer opens the attendee list for their event, sees the registered members, and those members match the rows in `registrations` for that event.
 - [AC-6] A member who is not an organizer sends a request to create an event, receives **403 Forbidden**, and no new row appears in `events`.
@@ -89,11 +91,38 @@ Club events
 - [AC-11] Deleting one event row in the database and reloading `/events` removes that event from the screen.
 - [AC-12] A visitor who opens the app's root URL `/` is sent to `/events`, and from there to `/login` when not signed in.
 
+### Slice 2: event registration
+- [AC-13] A member presses **Cancel registration** on an event they are registered for, sees "Registration cancelled", and their row for that event is gone from `registrations`.
+- [AC-14] A signed-in member sends a request to cancel another member's registration, receives 403, and that registration row stays in `registrations`.
+- [AC-15] A request to register or cancel without a session receives 401, and `registrations` does not change.
+- [AC-16] A member sends a request to register for an event id that does not exist, receives 404, and no new row appears in `registrations`.
+- [AC-17] A member sends a request to register for an event whose date has passed, receives 409 with "This event has already started", and no new row appears in `registrations`.
+- [AC-18] A signed-in member opens `/events` when there are no upcoming events and sees "No upcoming events yet. Check back later."
+- [AC-19] A signed-in member opens `/events` while the API is down and sees "Could not load events. Please try again." instead of an empty list.
+
 ## Traceability
 <!-- Filled in from Exercise 3 onward: each AC id, and the test that names it. -->
 | Criterion | Test |
 | --- | --- |
 | AC-1 |  |
+| AC-2 |  |
+| AC-3 |  |
+| AC-4 |  |
+| AC-5 |  |
+| AC-6 |  |
+| AC-7 |  |
+| AC-8 |  |
+| AC-9 |  |
+| AC-10 |  |
+| AC-11 |  |
+| AC-12 |  |
+| AC-13 |  |
+| AC-14 |  |
+| AC-15 |  |
+| AC-16 |  |
+| AC-17 |  |
+| AC-18 |  |
+| AC-19 |  |
 
 ## Spec vs result
 <!-- After the agent builds the slice: which criteria passed, which it missed or reinterpreted, and what you changed in this spec because of it. -->

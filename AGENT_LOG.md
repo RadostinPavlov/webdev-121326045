@@ -69,3 +69,10 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Checkpoints: curl for sign-in (200 and Set-Cookie), wrong password (401), /events without a session (302 to /login), check.mjs 12/12; reviewed the events SQL; signed in in the browser and saw the three seeded events; deleted the Yoga event in the database and it disappeared on reload (AC-11)
 - Went wrong: free_places came back as text because pg returns COUNT as a string; there was no route for /, so the app opened on "Cannot GET /"; db:setup kept old sessions while recreating users with new ids, so a signed-in browser pointed at a user that no longer existed; hit the usage limit for every model before the last fix
 - Changed by hand: added AC-12 for the root URL to SPEC.md; after the usage limit, changed the TRUNCATE in seed.js to also clear "session" and RESTART IDENTITY
+
+## 2026-11-23 · Refusal questions for event registration
+- Goal: find refusal cases I missed before writing the Slice 2 criteria
+- Delegated: asked the agent to read SPEC.md and ask up to five questions, without writing criteria or changing files
+- Checkpoints: the agent only read SPEC.md and asked five questions
+- Went wrong: nothing
+- Changed by hand: decided to refuse past events with 409, to put a cancellation deadline under Non-goals, to allow organizers to register, to leave cancelled events for the organizer slice, and to add a Constraint that capacity is never exceeded under concurrent requests
