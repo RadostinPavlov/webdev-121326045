@@ -13,6 +13,7 @@ One row per agent session. In Gemini CLI, type `/stats` before you quit and copy
 | 2026-11-20 | Gemini CLI | 263435 | 7758 | – | $0.1550 |
 | 2026-11-22 | Gemini CLI | 324924 | 4863 | – | $0.1771 |
 | 2026-11-23 | Gemini CLI | 28542 | 360 | – | $0.0151 |
+| 2026-11-23 | Gemini CLI | 432 | 7 | – | $0.0001 |
 
 Price list: Gemini API paid tier (ai.google.dev/gemini-api/docs/pricing), checked 2026-11-19:
 gemini-3.8-flash $0.75 / $3.75; gemini-3.5-flash-lite $0.30 / $2.50; gemini-3-flash-preview $0.50 / $3.00 per 1M input/output. Cached tokens not counted.

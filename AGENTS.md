@@ -60,6 +60,10 @@ that talks to the database directly is a second, unguarded way into your data: n
 - adding, renaming or removing an MCP tool
 - changing a coverage threshold
 - sending user data to a third-party model
+- running `npm run db:setup` (it empties and reseeds every table)
+- changing the capacity, double-registration or past-event rule in the registration service
+- changing what a route returns for 401, 403, 404 or 409
+- adding a new table or column outside a new numbered migration file
 
 ## Never
 - commit secrets, passwords, API keys or an OAuth client secret

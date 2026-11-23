@@ -76,3 +76,22 @@ One entry per agent session, newest at the bottom. Be honest: what went wrong is
 - Checkpoints: the agent only read SPEC.md and asked five questions
 - Went wrong: nothing
 - Changed by hand: decided to refuse past events with 409, to put a cancellation deadline under Non-goals, to allow organizers to register, to leave cancelled events for the organizer slice, and to add a Constraint that capacity is never exceeded under concurrent requests
+
+## 2026-11-23 · Autonomy and checkpoints for Exercise 3
+- Goal: decide before any code how far the agent may go alone in this feature
+- Delegated: nothing yet; this entry sets the rules for the next sessions
+- Checkpoints:
+  - The agent may read any file and propose plans without asking.
+  - It writes one step at a time and stops after each: migration, service with its rule test, endpoints with API tests, authorization, UI.
+  - After every step I run npm test, read git diff --staged and commit myself; the agent never commits or pushes.
+  - It stops and asks before anything in "Always ask before" in AGENTS.md, and before running db:setup (it wipes all data).
+  - It never reads .env and never changes a test so that the code passes.
+- Went wrong: –
+- Changed by hand: –
+
+## 2026-11-23 · Always-ask test (blocked)
+- Goal: check that the agent stops before installing a dependency
+- Delegated: asked the agent to install dayjs
+- Checkpoints: none reached
+- Went wrong: the API key had no quota left for gemini-3-flash-preview or the Pro models; the request never reached the main model
+- Changed by hand: added four feature-specific lines to "Always ask before" in AGENTS.md; kept the nine template lines because checks/ex2.mjs and the CI spec job check them
