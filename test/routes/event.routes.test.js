@@ -19,10 +19,13 @@ function createHarness({
         { id: 3, title: 'Board Games', date: futureDate(15), capacity: 12 }
     ],
     registrations = [],
-    eventService: injectedEventService
+    attendees = [],
+    eventService: injectedEventService,
+    authService: injectedAuthService
 } = {}) {
     const eventRows = new Map(events.map((event) => [event.id, { ...event }]));
     const registrationRows = registrations.map((registration) => ({ ...registration }));
+    const attendeeRows = attendees.map((attendee) => ({ ...attendee }));
     let nextRegistrationId =
         Math.max(0, ...registrationRows.map((registration) => registration.id)) + 1;
 
@@ -36,6 +39,18 @@ function createHarness({
                     free_places: event.capacity -
                         registrationRows.filter((row) => row.eventId === event.id).length
                 }));
+        },
+        async createEvent(event) {
+            const id = Math.max(0, ...eventRows.keys()) + 1;
+            const created = { id, ...event };
+            eventRows.set(id, created);
+            return created;
+        },
+        async getEventById(eventId) {
+            return eventRows.get(eventId) ?? null;
+        },
+        async getEventAttendees(eventId) {
+            return attendeeRows.filter((attendee) => attendee.eventId === eventId);
         },
         async withEventLock(eventId, callback) {
             const event = eventRows.get(eventId) ?? null;
@@ -72,6 +87,7 @@ function createHarness({
     const store = new session.MemoryStore();
     const app = createApp({
         eventService: service,
+        ...(injectedAuthService ? { authService: injectedAuthService } : {}),
         sessionOptions: {
             store,
             secret: SESSION_SECRET,
@@ -441,5 +457,209 @@ test('AC-17 registering for a past event returns 409 without adding a row', asyn
             { error: 'This event has already started' }
         );
         assert.deepEqual(harness.registrationRows, []);
+    });
+});
+
+test('AC-4 an organizer creates an event and validation errors map to 400', async (t) => {
+    await withHarness(t, {}, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 300, role: 'organizer' });
+        const event = {
+            title: 'Community Dinner',
+            date: futureDate(60).toISOString(),
+            capacity: 24
+        };
+        const response = await request(
+            harness,
+            '/api/events',
+            jsonOptions('POST', cookie, event)
+        );
+        const created = await response.json();
+
+        assert.equal(response.status, 201);
+        assert.equal(created.title, event.title);
+        assert.equal(created.capacity, event.capacity);
+        assert.equal(created.organizerId, 300);
+        assert.ok(harness.eventRows.has(created.id));
+
+        const invalidResponse = await request(
+            harness,
+            '/api/events',
+            jsonOptions('POST', cookie, { ...event, capacity: 0 })
+        );
+        assert.equal(invalidResponse.status, 400);
+        assert.deepEqual(
+            await invalidResponse.json(),
+            { error: 'Title, future date, and positive integer capacity are required' }
+        );
+    });
+});
+
+test('AC-4 and AC-6 event creation checks session before the service and maps its 403', async (t) => {
+    let serviceCalls = 0;
+    const eventService = {
+        async createEvent() {
+            serviceCalls += 1;
+            throw Object.assign(new Error('Only organizers can create events'), {
+                code: 'FORBIDDEN'
+            });
+        }
+    };
+
+    await withHarness(t, { eventService }, async (harness) => {
+        const noSessionResponse = await request(
+            harness,
+            '/api/events',
+            jsonOptions('POST', null, { title: 'Event', date: futureDate(), capacity: 4 })
+        );
+        assert.equal(noSessionResponse.status, 401);
+        assert.equal(serviceCalls, 0);
+
+        const memberCookie = await harness.cookieFor({ id: 100, role: 'member' });
+        const memberResponse = await request(
+            harness,
+            '/api/events',
+            jsonOptions(
+                'POST',
+                memberCookie,
+                { title: 'Event', date: futureDate(), capacity: 4 }
+            )
+        );
+
+        assert.equal(memberResponse.status, 403);
+        assert.deepEqual(await memberResponse.json(), {
+            error: 'Only organizers can create events'
+        });
+        assert.equal(serviceCalls, 1);
+    });
+});
+
+test('AC-6 a member receives 403 from the event service when creating an event', async (t) => {
+    await withHarness(t, {}, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 100, role: 'member' });
+        const response = await request(
+            harness,
+            '/api/events',
+            jsonOptions('POST', cookie, {
+                title: 'Unauthorized Event',
+                date: futureDate(60).toISOString(),
+                capacity: 10
+            })
+        );
+
+        assert.equal(response.status, 403);
+        assert.deepEqual(await response.json(), {
+            error: 'Only organizers can create events'
+        });
+        assert.equal(harness.eventRows.size, 3);
+    });
+});
+
+test('AC-5 only an event owner can see its attendees; missing event returns 404', async (t) => {
+    const attendee = {
+        eventId: 9,
+        registrationId: 70,
+        userId: 101,
+        email: 'member@example.com'
+    };
+    await withHarness(t, {
+        events: [{
+            id: 9,
+            title: 'Owner event',
+            date: futureDate(),
+            capacity: 10,
+            organizerId: 300
+        }],
+        attendees: [attendee]
+    }, async (harness) => {
+        const ownerCookie = await harness.cookieFor({ id: 300, role: 'organizer' });
+        const ownerResponse = await request(
+            harness,
+            '/api/events/9/attendees',
+            { headers: { Cookie: ownerCookie } }
+        );
+        assert.equal(ownerResponse.status, 200);
+        assert.deepEqual(await ownerResponse.json(), [attendee]);
+
+        const otherOrganizerCookie = await harness.cookieFor({
+            id: 301,
+            role: 'organizer'
+        });
+        const forbiddenResponse = await request(
+            harness,
+            '/api/events/9/attendees',
+            { headers: { Cookie: otherOrganizerCookie } }
+        );
+        assert.equal(forbiddenResponse.status, 403);
+
+        const missingResponse = await request(
+            harness,
+            '/api/events/999/attendees',
+            { headers: { Cookie: ownerCookie } }
+        );
+        assert.equal(missingResponse.status, 404);
+        assert.deepEqual(await missingResponse.json(), { error: 'Event not found' });
+    });
+});
+
+test('AC-5 unauthenticated attendee lookup returns 401 before the service', async (t) => {
+    let serviceCalls = 0;
+    const eventService = {
+        async listEventAttendees() {
+            serviceCalls += 1;
+            return [];
+        }
+    };
+
+    await withHarness(t, { eventService }, async (harness) => {
+        const response = await request(harness, '/api/events/1/attendees');
+
+        assert.equal(response.status, 401);
+        assert.equal(serviceCalls, 0);
+    });
+});
+
+test('AC-7 signup creates an account and maps an existing email to 409', async (t) => {
+    const signupCalls = [];
+    const authService = {
+        async signup(email, password) {
+            signupCalls.push([email, password]);
+            if (email === 'existing@example.com') {
+                throw Object.assign(new Error('Email is already registered'), {
+                    code: 'EMAIL_TAKEN'
+                });
+            }
+            return { id: 501, email, role: 'member' };
+        }
+    };
+
+    await withHarness(t, { authService }, async (harness) => {
+        const response = await request(
+            harness,
+            '/api/auth/signup',
+            jsonOptions('POST', null, {
+                email: 'new@example.com',
+                password: 'a secure password'
+            })
+        );
+
+        assert.equal(response.status, 201);
+        assert.deepEqual(await response.json(), {
+            message: 'Account created',
+            user: { id: 501, email: 'new@example.com', role: 'member' }
+        });
+        assert.deepEqual(signupCalls[0], ['new@example.com', 'a secure password']);
+
+        const duplicateResponse = await request(
+            harness,
+            '/api/auth/signup',
+            jsonOptions('POST', null, {
+                email: 'existing@example.com',
+                password: 'a secure password'
+            })
+        );
+        assert.equal(duplicateResponse.status, 409);
+        assert.deepEqual(await duplicateResponse.json(), {
+            error: 'Email is already registered'
+        });
     });
 });

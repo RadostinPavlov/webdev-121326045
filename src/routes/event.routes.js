@@ -11,7 +11,10 @@ function parseId(value) {
 
 function sendServiceError(res, error) {
     const statusByCode = {
+        VALIDATION_ERROR: 400,
         EVENT_NOT_FOUND: 404,
+        FORBIDDEN: 403,
+        EMAIL_TAKEN: 409,
         EVENT_STARTED: 409,
         ALREADY_REGISTERED: 409,
         EVENT_FULL: 409,
@@ -39,6 +42,40 @@ function createEventRouter(eventService) {
         try {
             const events = await eventService.listUpcomingEvents(req.session.user.id);
             return res.json(events);
+        } catch (error) {
+            return sendServiceError(res, error);
+        }
+    });
+
+    router.post('/', async (req, res) => {
+        if (!req.session.user) {
+            return res.status(401).json({ error: 'Not signed in' });
+        }
+
+        try {
+            const event = await eventService.createEvent(req.session.user, req.body);
+            return res.status(201).json(event);
+        } catch (error) {
+            return sendServiceError(res, error);
+        }
+    });
+
+    router.get('/:eventId/attendees', async (req, res) => {
+        if (!req.session.user) {
+            return res.status(401).json({ error: 'Not signed in' });
+        }
+
+        const eventId = parseId(req.params.eventId);
+        if (eventId === null) {
+            return res.status(400).json({ error: 'Invalid event id' });
+        }
+
+        try {
+            const attendees = await eventService.listEventAttendees(
+                eventId,
+                req.session.user
+            );
+            return res.json(attendees);
         } catch (error) {
             return sendServiceError(res, error);
         }
