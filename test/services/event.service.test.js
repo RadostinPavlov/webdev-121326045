@@ -72,6 +72,20 @@ async function assertServiceError(promise, code, message) {
     });
 }
 
+test('listUpcomingEvents passes the member id through to the data layer', async () => {
+    let requestedUserId;
+    const events = [{ id: 1, registration_id: 12 }];
+    const service = createEventService({
+        async getUpcomingEvents(userId) {
+            requestedUserId = userId;
+            return events;
+        }
+    });
+
+    assert.deepEqual(await service.listUpcomingEvents(100), events);
+    assert.equal(requestedUserId, 100);
+});
+
 test('AC-1 a full event rejects registration without adding a row', async () => {
     const registration = { id: 10, eventId: 1, userId: 100 };
     const { service, registrations } = createFixture({

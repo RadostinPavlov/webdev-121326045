@@ -244,10 +244,12 @@ test('AC-10 a signed-in events page loads three events with dates and free place
             headers: { Cookie: cookie }
         });
         const catalog = await catalogResponse.json();
+        const pageHtml = await pageResponse.text();
 
         assert.equal(pageResponse.status, 200);
         assert.equal(catalogResponse.status, 200);
-        assert.match(await pageResponse.text(), /fetch\(['"]\/api\/events['"]\)/);
+        assert.match(pageHtml, /src="\/js\/events-view\.js"/);
+        assert.match(pageHtml, /src="\/js\/events\.js"/);
         assert.equal(catalog.length, 3);
         for (const event of catalog) {
             assert.ok(event.title);

@@ -1,18 +1,26 @@
 const pool = require('./db');
 
-async function getUpcomingEvents() {
+async function getUpcomingEvents(userId) {
     const query = `
         SELECT 
             e.id, 
             e.title, 
             e.date, 
             e.capacity,
-            (e.capacity - (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id))::int as free_places
+            member_registration.id AS registration_id,
+            (e.capacity - (
+                SELECT COUNT(*)
+                FROM registrations event_registration
+                WHERE event_registration.event_id = e.id
+            ))::int AS free_places
         FROM events e
+        LEFT JOIN registrations member_registration
+            ON member_registration.event_id = e.id
+            AND member_registration.user_id = $1
         WHERE e.date >= NOW()
         ORDER BY e.date ASC
     `;
-    const result = await pool.query(query);
+    const result = await pool.query(query, [userId]);
     return result.rows;
 }
 

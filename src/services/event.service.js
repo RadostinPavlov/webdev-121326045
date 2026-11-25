@@ -8,8 +8,8 @@ function createServiceError(code, message) {
 
 function createEventService(data) {
     return {
-        async listUpcomingEvents() {
-            return data.getUpcomingEvents();
+        async listUpcomingEvents(userId) {
+            return data.getUpcomingEvents(userId);
         },
 
         async registerForEvent(eventId, userId) {
