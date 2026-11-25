@@ -27,6 +27,15 @@ async function seed() {
             );
         }
 
+        const organizerResult = await client.query(
+            'SELECT id FROM users WHERE email = $1',
+            ['organizer@example.com']
+        );
+        const organizer = organizerResult.rows[0];
+        if (!organizer) {
+            throw new Error('Seeded organizer account was not found');
+        }
+
         if (process.env.MCP_TOKEN) {
             const tokenHash = crypto
                 .createHash('sha256')
@@ -51,8 +60,9 @@ async function seed() {
 
         for (const [title, date, capacity, description] of events) {
             await client.query(
-                'INSERT INTO events (title, date, capacity, description) VALUES ($1, $2, $3, $4)',
-                [title, date, capacity, description]
+                `INSERT INTO events (title, date, capacity, description, organizer_id)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [title, date, capacity, description, organizer.id]
             );
         }
 
