@@ -140,3 +140,12 @@ Updated Slice 2 plan. Grounded in SPEC.md and AGENTS.md. No files changed.
   - step 2: after the service, npm test pass 7, fail 0; service has no SQL; BEGIN and FOR UPDATE are in src/db/event.db.js; tests unchanged; committed
 - Went wrong: schema.sql was left with one line instead of being deleted; the plan promised a concurrent-capacity test in the service tests, but none was written (a fake cannot prove the row lock anyway; FOR UPDATE is in src/db/event.db.js)
 - Changed by hand: –
+
+
+## 2026-11-25 · Slice 2: API and authorization (Copilot)
+- Goal: build step 3 (endpoints with HTTP tests) and step 4 (authorization) of event registration
+- Delegated: split src/server.js into src/app.js and src/server.js; POST /api/events/:eventId/registrations and DELETE /api/registrations/:registrationId; test/routes/event.routes.test.js with real HTTP requests, fake data and an in-memory session store
+- Checkpoints:
+  - step 3: listen only in src/server.js; the route checks the session first (401), parses ids (400), calls the service and maps error codes to 403/404/409, with no rules of its own; npm test pass 22, fail 0; npm start works; committed
+- Went wrong: Copilot also filled the Traceability table in SPEC.md, which I did not ask for and which listed only the route tests; I undid that file. The test for cancelling an owned registration has no AC-13 in its title
+- Changed by hand: –
