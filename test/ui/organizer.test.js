@@ -175,3 +175,256 @@ test('AC-5 members do not see organizer controls or load attendee data', async (
     assert.ok(!requests.some((url) => url.endsWith('/attendees')));
     assert.match(ui.eventsHtml, /Event/);
 });
+
+test('AC-20 suggestion shows loading then places the editable draft in the form without creating an event', async () => {
+    let finishSuggestion;
+    const requests = [];
+    const ui = createPage(async (url, options = {}) => {
+        requests.push({ url, options });
+        if (url === '/api/events') {
+            return response(200, []);
+        }
+        if (url === '/api/events/description-draft') {
+            return new Promise((resolve) => {
+                finishSuggestion = resolve;
+            });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+    });
+    const form = {
+        title: 'Community Dinner',
+        date: '2100-06-01',
+        time: '18:30',
+        venue: 'Club Hall',
+        audience: 'members',
+        notes: 'Bring a dish'
+    };
+
+    await ui.page.loadEvents({ id: 40, role: 'organizer' });
+    const suggesting = ui.page.suggestDescription(form);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.match(ui.organizerHtml, /Suggesting description/);
+
+    finishSuggestion(response(200, {
+        description: 'Join us for dinner.',
+        source: 'model'
+    }));
+    await suggesting;
+
+    assert.match(ui.organizerHtml, /Join us for dinner\./);
+    assert.match(ui.organizerHtml, /name="venue" type="text" value="Club Hall"/);
+    assert.match(ui.organizerHtml, /name="audience" type="text" value="members"/);
+    assert.match(ui.organizerHtml, /name="notes">Bring a dish<\/textarea>/);
+    assert.equal(requests.filter(({ url }) => url === '/api/events').length, 1);
+    assert.equal(requests[1].url, '/api/events/description-draft');
+    assert.deepEqual(JSON.parse(requests[1].options.body), form);
+});
+
+test('AC-21 fallback description displays the required notice and can be created manually', async () => {
+    const requests = [];
+    const event = {
+        id: 8,
+        title: 'Community Dinner',
+        date: '2100-06-01T18:30:00.000Z',
+        capacity: 20,
+        description: 'Join us for Community Dinner.',
+        venue: 'Club Hall',
+        organizerId: 40
+    };
+    const ui = createPage(async (url, options = {}) => {
+        requests.push({ url, options });
+        if (url === '/api/events/description-draft') {
+            return response(200, {
+                description: 'Join us for Community Dinner.',
+                source: 'fallback',
+                message: 'Suggested without the model'
+            });
+        }
+        if (url === '/api/events' && options.method === 'POST') {
+            return response(201, event);
+        }
+        if (url === '/api/events') {
+            return response(200, [event]);
+        }
+        if (url === '/api/events/8/attendees') {
+            return response(200, []);
+        }
+        throw new Error(`Unexpected request: ${url}`);
+    });
+    const form = {
+        title: 'Community Dinner',
+        date: '2100-06-01',
+        time: '18:30',
+        capacity: '20',
+        description: '',
+        venue: 'Club Hall',
+        audience: 'members',
+        notes: ''
+    };
+
+    await ui.page.loadEvents({ id: 40, role: 'organizer' });
+    await ui.page.suggestDescription(form);
+
+    assert.match(ui.organizerHtml, /Suggested without the model/);
+    assert.match(ui.organizerHtml, /Join us for Community Dinner\./);
+    assert.equal(requests.filter(({ url, options }) =>
+        url === '/api/events' && options.method === 'POST'
+    ).length, 0);
+
+    await ui.page.createEvent({
+        ...form,
+        date: '2100-06-01T18:30:00.000Z',
+        capacity: 20,
+        description: 'Join us for Community Dinner.'
+    });
+    assert.equal(requests.filter(({ url, options }) =>
+        url === '/api/events' && options.method === 'POST'
+    ).length, 1);
+    assert.equal(JSON.parse(requests.find(({ url, options }) =>
+        url === '/api/events' && options.method === 'POST'
+    ).options.body).description, 'Join us for Community Dinner.');
+});
+
+test('AC-22 poster extraction reads a PNG as base64 and fills editable event fields without creating an event', async () => {
+    const requests = [];
+    const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2]);
+    const file = {
+        type: 'image/png',
+        size: bytes.byteLength,
+        async arrayBuffer() {
+            return bytes.buffer;
+        }
+    };
+    const ui = createPage(async (url, options = {}) => {
+        requests.push({ url, options });
+        if (url === '/api/events') {
+            return response(200, []);
+        }
+        if (url === '/api/events/poster-extraction') {
+            return response(200, {
+                title: 'Open Day',
+                date: '2100-07-12',
+                time: '17:45',
+                venue: 'Club Hall',
+                capacity: 42,
+                source: 'model'
+            });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+    });
+
+    await ui.page.loadEvents({ id: 40, role: 'organizer' });
+    await ui.page.extractFromPoster(file, {
+        title: '',
+        date: '',
+        time: '',
+        venue: '',
+        capacity: '',
+        description: '',
+        audience: '',
+        notes: ''
+    });
+
+    assert.match(ui.organizerHtml, /value="Open Day"/);
+    assert.match(ui.organizerHtml, /name="date" type="date" value="2100-07-12"/);
+    assert.match(ui.organizerHtml, /name="time" type="time" value="17:45"/);
+    assert.match(ui.organizerHtml, /name="capacity" type="number" min="1" step="1" value="42"/);
+    assert.match(ui.organizerHtml, /name="venue" type="text" value="Club Hall"/);
+    assert.equal(requests[1].url, '/api/events/poster-extraction');
+    assert.deepEqual(JSON.parse(requests[1].options.body), {
+        mimeType: 'image/png',
+        data: Buffer.from(bytes).toString('base64')
+    });
+    assert.equal(requests.filter(({ url, options }) =>
+        url === '/api/events' && options.method === 'POST'
+    ).length, 0);
+});
+
+test('AC-23 poster extraction lists invalid fields for manual entry and rejects unsupported uploads', async () => {
+    const requests = [];
+    const ui = createPage(async (url, options = {}) => {
+        requests.push({ url, options });
+        if (url === '/api/events') {
+            return response(200, []);
+        }
+        if (url === '/api/events/poster-extraction') {
+            return response(200, {
+                title: 'Open Day',
+                date: '',
+                time: '17:45',
+                venue: 'Club Hall',
+                capacity: '',
+                source: 'model',
+                message: 'Please fill in the date and capacity by hand.'
+            });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+    });
+    const fields = {
+        title: '',
+        date: '',
+        time: '',
+        venue: '',
+        capacity: '',
+        description: '',
+        audience: '',
+        notes: ''
+    };
+
+    await ui.page.loadEvents({ id: 40, role: 'organizer' });
+    await ui.page.extractFromPoster({
+        type: 'image/jpeg',
+        size: 5 * 1024 * 1024,
+        async arrayBuffer() {
+            throw new Error('Oversized file must not be read');
+        }
+    }, fields);
+
+    assert.match(ui.organizerHtml, /Choose a PNG or JPEG poster no larger than 4 MB/);
+    assert.equal(requests.length, 1);
+
+    await ui.page.extractFromPoster({
+        type: 'image/jpeg',
+        size: 4,
+        async arrayBuffer() {
+            return Uint8Array.from([0xff, 0xd8, 0xff]).buffer;
+        }
+    }, fields);
+
+    assert.match(ui.organizerHtml, /Please fill in the date and capacity by hand\./);
+    assert.match(ui.organizerHtml, /name="date" type="date" value=""/);
+    assert.match(ui.organizerHtml, /name="capacity" type="number" min="1" step="1" value=""/);
+});
+
+test('AC-20 and AC-22 assistant requests expose loading and error states', async () => {
+    const requests = [];
+    const ui = createPage(async (url, options = {}) => {
+        requests.push({ url, options });
+        if (url === '/api/events') {
+            return response(200, []);
+        }
+        if (url === '/api/events/description-draft') {
+            return response(503, { error: 'Draft service unavailable' });
+        }
+        if (url === '/api/events/poster-extraction') {
+            return response(500, { error: 'Poster service unavailable' });
+        }
+        throw new Error(`Unexpected request: ${url}`);
+    });
+    const file = {
+        type: 'image/png',
+        size: 8,
+        async arrayBuffer() {
+            return Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]).buffer;
+        }
+    };
+    const form = { title: 'Open Day', date: '2100-07-12', time: '18:00' };
+
+    await ui.page.loadEvents({ id: 40, role: 'organizer' });
+    await ui.page.suggestDescription(form);
+    assert.match(ui.organizerHtml, /Draft service unavailable/);
+
+    await ui.page.extractFromPoster(file, form);
+    assert.match(ui.organizerHtml, /Poster service unavailable/);
+    assert.equal(requests.length, 3);
+});

@@ -1,5 +1,5 @@
 (function (root, factory) {
-    const page = factory();
+    const page = factory(root);
     if (typeof module === 'object' && module.exports) {
         module.exports = page;
     } else {
@@ -9,19 +9,75 @@
     if (typeof document !== 'undefined') {
         page.mount(document, root);
     }
-}(globalThis, function () {
+}(globalThis, function (root) {
+    const OrganizerView = typeof module === 'object' && module.exports
+        ? require('./organizer-view.js')
+        : root.OrganizerView;
+
+    function fileToBase64(file) {
+        return file.arrayBuffer().then((buffer) => {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            const chunkSize = 0x8000;
+            for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+                binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+            }
+            return globalThis.btoa(binary);
+        });
+    }
+
     function createEventsPage({ fetch, render, redirect, renderOrganizer = () => {} }) {
         let events = [];
         let currentUser = null;
-        let organizerState = { visible: false };
+        let organizerState = {
+            visible: false,
+            assistant: OrganizerView.createAssistantState()
+        };
 
         function present(state) {
             render(state);
         }
 
         function presentOrganizer(state) {
-            organizerState = state;
-            renderOrganizer(state);
+            organizerState = { ...organizerState, ...state };
+            if (organizerState.visible && !organizerState.assistant) {
+                organizerState.assistant = OrganizerView.createAssistantState();
+            }
+            renderOrganizer(organizerState);
+        }
+
+        function transitionAssistant(action) {
+            organizerState = {
+                ...organizerState,
+                visible: true,
+                assistant: OrganizerView.transitionAssistantState(
+                    organizerState.assistant,
+                    action
+                )
+            };
+            renderOrganizer(organizerState);
+        }
+
+        async function readError(response, fallback) {
+            try {
+                const result = await response.json();
+                return result.error || fallback;
+            } catch {
+                return fallback;
+            }
+        }
+
+        function eventFieldsFromForm(event) {
+            return {
+                title: event.title ?? '',
+                date: event.date ?? '',
+                time: event.time ?? '',
+                capacity: event.capacity === undefined ? '' : String(event.capacity),
+                description: event.description ?? '',
+                venue: event.venue ?? '',
+                audience: event.audience ?? '',
+                notes: event.notes ?? ''
+            };
         }
 
         async function loadAttendees(organizerEvents, message) {
@@ -169,11 +225,22 @@
                 await loadEvents();
             },
             async createEvent(event) {
+                transitionAssistant({
+                    type: 'form-values',
+                    values: eventFieldsFromForm(event)
+                });
                 try {
+                    const eventForApi = {
+                        ...event,
+                        date: /^\d{4}-\d{2}-\d{2}$/.test(event.date)
+                            ? new Date(`${event.date}T${event.time || '00:00'}`).toISOString()
+                            : new Date(event.date).toISOString(),
+                        capacity: Number(event.capacity)
+                    };
                     const response = await fetch('/api/events', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(event)
+                        body: JSON.stringify(eventForApi)
                     });
                     if (response.status === 401) {
                         redirect('/login');
@@ -182,19 +249,109 @@
 
                     const result = await response.json();
                     if (!response.ok) {
-                        presentOrganizer({
-                            ...organizerState,
-                            message: result.error || 'Could not create event.'
-                        });
+                        presentOrganizer({ message: result.error || 'Could not create event.' });
                         return;
                     }
 
                     await loadEvents(result.message || 'Event created');
                 } catch (error) {
                     console.error('Could not create event:', error);
-                    presentOrganizer({
-                        ...organizerState,
-                        message: 'Could not create event. Please try again.'
+                    presentOrganizer({ message: 'Could not create event. Please try again.' });
+                }
+            },
+            async suggestDescription(event) {
+                transitionAssistant({
+                    type: 'form-values',
+                    values: eventFieldsFromForm(event)
+                });
+                transitionAssistant({ type: 'description-loading' });
+                try {
+                    const response = await fetch('/api/events/description-draft', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(event)
+                    });
+                    if (response.status === 401) {
+                        redirect('/login');
+                        return;
+                    }
+                    if (!response.ok) {
+                        const message = await readError(response, 'Could not suggest a description.');
+                        transitionAssistant({ type: 'description-error', message });
+                        return;
+                    }
+                    const result = await response.json();
+                    if (typeof result.description !== 'string') {
+                        throw new TypeError('The description response must include a description');
+                    }
+                    transitionAssistant({
+                        type: 'description-result',
+                        description: result.description,
+                        message: result.source === 'fallback'
+                            ? (result.message || 'Suggested without the model')
+                            : ''
+                    });
+                } catch (error) {
+                    console.error('Could not suggest event description:', error);
+                    transitionAssistant({
+                        type: 'description-error',
+                        message: 'Could not suggest a description. Please try again.'
+                    });
+                }
+            },
+            async extractFromPoster(file, event) {
+                transitionAssistant({
+                    type: 'form-values',
+                    values: eventFieldsFromForm(event)
+                });
+                if (
+                    !file ||
+                    !['image/png', 'image/jpeg'].includes(file.type) ||
+                    (Number.isFinite(file.size) && file.size > 4 * 1024 * 1024)
+                ) {
+                    transitionAssistant({
+                        type: 'poster-error',
+                        message: 'Choose a PNG or JPEG poster no larger than 4 MB.'
+                    });
+                    return;
+                }
+
+                transitionAssistant({ type: 'poster-loading' });
+                try {
+                    const data = await fileToBase64(file);
+                    const response = await fetch('/api/events/poster-extraction', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mimeType: file.type, data })
+                    });
+                    if (response.status === 401) {
+                        redirect('/login');
+                        return;
+                    }
+                    if (!response.ok) {
+                        const message = await readError(response, 'Could not extract poster details.');
+                        transitionAssistant({ type: 'poster-error', message });
+                        return;
+                    }
+                    const result = await response.json();
+                    if (
+                        typeof result.title !== 'string' ||
+                        typeof result.date !== 'string' ||
+                        typeof result.venue !== 'string' ||
+                        (typeof result.capacity !== 'number' && result.capacity !== '')
+                    ) {
+                        throw new TypeError('The poster response contains invalid event fields');
+                    }
+                    transitionAssistant({
+                        type: 'poster-result',
+                        fields: result,
+                        message: result.message || ''
+                    });
+                } catch (error) {
+                    console.error('Could not extract poster details:', error);
+                    transitionAssistant({
+                        type: 'poster-error',
+                        message: 'Could not extract poster details. Please try again.'
                     });
                 }
             },
@@ -249,9 +406,27 @@
                 const formData = new FormData(event.target);
                 page.createEvent({
                     title: formData.get('title'),
-                    date: new Date(formData.get('date')).toISOString(),
-                    capacity: Number(formData.get('capacity'))
+                    date: formData.get('date'),
+                    capacity: formData.get('capacity'),
+                    description: formData.get('description'),
+                    venue: formData.get('venue'),
+                    audience: formData.get('audience'),
+                    notes: formData.get('notes')
                 });
+            }
+        });
+
+        organizerContainer.addEventListener('click', (event) => {
+            const button = event.target.closest('button[data-action]');
+            if (!button) {
+                return;
+            }
+            const form = organizerContainer.querySelector('form[data-form="create-event"]');
+            const values = Object.fromEntries(new FormData(form).entries());
+            if (button.dataset.action === 'suggest-description') {
+                page.suggestDescription(values);
+            } else if (button.dataset.action === 'extract-poster') {
+                page.extractFromPoster(form.elements.poster.files[0], values);
             }
         });
 
