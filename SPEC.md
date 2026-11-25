@@ -118,6 +118,13 @@ The route answers 201 `{"message":"You are registered"}` or the error with its s
 - [AC-18] A signed-in member opens `/events` when there are no upcoming events and sees "No upcoming events yet. Check back later."
 - [AC-19] A signed-in member opens `/events` while the API is down and sees "Could not load events. Please try again." instead of an empty list.
 
+### Slice 3: model feature
+- [AC-20] An organizer fills in title, date and venue, presses **Suggest description**, and sees a draft in the description field that they can edit; no row changes in `events` until they press **Create**.
+- [AC-21] When the model is unavailable (no key, timeout or rate limit), an organizer who presses **Suggest description** sees a template description and the note "Suggested without the model", and can still create the event by hand.
+- [AC-22] An organizer uploads a PNG or JPEG poster and sees the extracted title, date, venue and capacity in the create form, ready to edit; no row changes in `events` until they press **Create**.
+- [AC-23] When the poster gives a past date or a capacity that is not a positive whole number, that field stays empty in the form and the organizer sees which fields to fill in by hand.
+- [AC-24] A member who is not an organizer sends a request for a description draft or a poster extraction and receives 403; a request without a session receives 401.
+
 ## Traceability
 <!-- Filled in from Exercise 3 onward: each AC id, and the test that names it. -->
 | Criterion | Test |
