@@ -24,7 +24,12 @@ function validateNewEvent(input) {
         );
     }
 
-    return { title, date, capacity };
+    const description = typeof input?.description === 'string'
+        ? input.description.trim()
+        : null;
+    const venue = typeof input?.venue === 'string' ? input.venue.trim() : null;
+
+    return { title, date, capacity, description, venue };
 }
 
 function createEventService(data) {

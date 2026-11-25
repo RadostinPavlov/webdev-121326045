@@ -25,12 +25,13 @@ async function getUpcomingEvents(userId) {
     return result.rows;
 }
 
-async function createEvent({ title, date, capacity, organizerId }) {
+async function createEvent({ title, date, capacity, description, venue, organizerId }) {
     const result = await pool.query(
-        `INSERT INTO events (title, date, capacity, organizer_id)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, title, date, capacity, organizer_id AS "organizerId"`,
-        [title, date, capacity, organizerId]
+        `INSERT INTO events (title, date, capacity, description, venue, organizer_id)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, title, date, capacity, description, venue,
+                   organizer_id AS "organizerId"`,
+        [title, date, capacity, description, venue, organizerId]
     );
     return result.rows[0];
 }

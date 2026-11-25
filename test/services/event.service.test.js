@@ -116,7 +116,9 @@ test('AC-4 an organizer creates an event with its title, date, capacity and owne
     const input = {
         title: 'Community Dinner',
         date: new Date('2100-06-01T18:00:00.000Z'),
-        capacity: 24
+        capacity: 24,
+        description: 'Join us for dinner.',
+        venue: 'Club Hall'
     };
 
     const created = await service.createEvent(organizer, input);
