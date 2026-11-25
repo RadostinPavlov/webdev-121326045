@@ -7,6 +7,7 @@ async function getUpcomingEvents(userId) {
             e.title, 
             e.date, 
             e.capacity,
+            e.organizer_id AS "organizerId",
             member_registration.id AS registration_id,
             (e.capacity - (
                 SELECT COUNT(*)

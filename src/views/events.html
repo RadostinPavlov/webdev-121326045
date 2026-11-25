@@ -12,6 +12,8 @@
         .event-details { color: #666; margin-top: 0.5rem; }
         button { cursor: pointer; padding: 0.5rem 1rem; }
         .feedback { font-weight: bold; }
+        #organizerSection { border-top: 1px solid #ccc; margin-top: 2rem; padding-top: 1rem; }
+        .attendee-list { margin-bottom: 1.5rem; }
     </style>
 </head>
 <body>
@@ -24,7 +26,10 @@
         <p>Loading events...</p>
     </div>
 
+    <section id="organizerSection" aria-labelledby="organizerHeading" hidden></section>
+
     <script src="/js/events-view.js"></script>
+    <script src="/js/organizer-view.js"></script>
     <script src="/js/events.js"></script>
 </body>
 </html>
