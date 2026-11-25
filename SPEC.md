@@ -129,25 +129,30 @@ The route answers 201 `{"message":"You are registered"}` or the error with its s
 <!-- Filled in from Exercise 3 onward: each AC id, and the test that names it. -->
 | Criterion | Test |
 | --- | --- |
-| AC-1 |  |
-| AC-2 |  |
-| AC-3 |  |
-| AC-4 |  |
-| AC-5 |  |
-| AC-6 |  |
-| AC-7 |  |
-| AC-8 |  |
-| AC-9 |  |
-| AC-10 |  |
-| AC-11 |  |
-| AC-12 |  |
-| AC-13 |  |
-| AC-14 |  |
-| AC-15 |  |
-| AC-16 |  |
-| AC-17 |  |
-| AC-18 |  |
-| AC-19 |  |
+| AC-1 | `test/mcp-server/server.test.js`, `test/routes/event.routes.test.js`, `test/services/event.service.test.js` |
+| AC-2 | `test/mcp-server/server.test.js`, `test/routes/event.routes.test.js`, `test/services/event.service.test.js`, `test/ui/events.test.js` |
+| AC-3 | `test/mcp-server/server.test.js`, `test/routes/event.routes.test.js`, `test/services/event.service.test.js` |
+| AC-4 | `test/routes/event.routes.test.js`, `test/services/event.service.test.js`, `test/ui/organizer.test.js` |
+| AC-5 | `test/routes/event.routes.test.js`, `test/services/event.service.test.js`, `test/ui/organizer.test.js` |
+| AC-6 | `test/routes/event.routes.test.js`, `test/services/event.service.test.js` |
+| AC-7 | `test/routes/event.routes.test.js`, `test/services/auth.service.test.js`, `test/ui/login.test.js` |
+| AC-8 | `test/routes/event.routes.test.js`, `test/ui/events.test.js` |
+| AC-9 | `test/routes/event.routes.test.js` |
+| AC-10 | `test/mcp-server/server.test.js`, `test/routes/event.routes.test.js` |
+| AC-11 | `test/routes/event.routes.test.js` |
+| AC-12 | `test/routes/event.routes.test.js` |
+| AC-13 | `test/mcp-server/server.test.js`, `test/services/event.service.test.js`, `test/ui/events.test.js` |
+| AC-14 | `test/mcp-server/server.test.js`, `test/routes/event.routes.test.js`, `test/services/event.service.test.js` |
+| AC-15 | `test/mcp-server/server.test.js`, `test/routes/event.routes.test.js`, `test/services/auth.service.test.js` |
+| AC-16 | `test/mcp-server/server.test.js`, `test/routes/event.routes.test.js`, `test/services/event.service.test.js` |
+| AC-17 | `test/mcp-server/server.test.js`, `test/routes/event.routes.test.js`, `test/services/event.service.test.js` |
+| AC-18 | `test/ui/events.test.js` |
+| AC-19 | `test/ui/events.test.js` |
+| AC-20 | `test/routes/event.routes.test.js`, `test/services/model-assistance.service.test.js`, `test/ui/organizer.test.js` |
+| AC-21 | `test/routes/event.routes.test.js`, `test/services/model-assistance.service.test.js`, `test/ui/organizer.test.js` |
+| AC-22 | `test/routes/event.routes.test.js`, `test/services/model-assistance.service.test.js`, `test/ui/organizer.test.js` |
+| AC-23 | `test/routes/event.routes.test.js`, `test/services/model-assistance.service.test.js`, `test/ui/organizer.test.js` |
+| AC-24 | `test/routes/event.routes.test.js`, `test/services/model-assistance.service.test.js` |
 
 ## Spec vs result
 <!-- After the agent builds the slice: which criteria passed, which it missed or reinterpreted, and what you changed in this spec because of it. -->
