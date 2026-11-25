@@ -24,6 +24,41 @@ async function getUpcomingEvents(userId) {
     return result.rows;
 }
 
+async function createEvent({ title, date, capacity, organizerId }) {
+    const result = await pool.query(
+        `INSERT INTO events (title, date, capacity, organizer_id)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, title, date, capacity, organizer_id AS "organizerId"`,
+        [title, date, capacity, organizerId]
+    );
+    return result.rows[0];
+}
+
+async function getEventById(eventId) {
+    const result = await pool.query(
+        `SELECT id, organizer_id AS "organizerId"
+         FROM events
+         WHERE id = $1`,
+        [eventId]
+    );
+    return result.rows[0] ?? null;
+}
+
+async function getEventAttendees(eventId) {
+    const result = await pool.query(
+        `SELECT registrations.id AS "registrationId",
+                registrations.event_id AS "eventId",
+                users.id AS "userId",
+                users.email
+         FROM registrations
+         JOIN users ON users.id = registrations.user_id
+         WHERE registrations.event_id = $1
+         ORDER BY users.email`,
+        [eventId]
+    );
+    return result.rows;
+}
+
 async function withEventLock(eventId, fn) {
     const client = await pool.connect();
     let transactionOpen = false;
@@ -106,6 +141,9 @@ async function deleteRegistration(registrationId, userId) {
 
 module.exports = {
     getUpcomingEvents,
+    createEvent,
+    getEventById,
+    getEventAttendees,
     withEventLock,
     getRegistrationById,
     deleteRegistration

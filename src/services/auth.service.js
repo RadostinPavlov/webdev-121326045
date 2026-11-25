@@ -18,6 +18,23 @@ async function login(email, password) {
     return { id: user.id, email: user.email, role: user.role };
 }
 
+function createAuthService(data, passwords = passwordService) {
+    return {
+        async signup(email, password) {
+            const passwordHash = await passwords.hashPassword(password);
+            const user = await data.createUser(email, passwordHash);
+
+            if (user?.error === 'EMAIL_TAKEN') {
+                const error = new Error('Email is already registered');
+                error.code = 'EMAIL_TAKEN';
+                throw error;
+            }
+
+            return { id: user.id, email: user.email, role: user.role };
+        }
+    };
+}
+
 function createTokenService(data) {
     return {
         async getUserForToken(token) {
@@ -41,5 +58,12 @@ function createTokenService(data) {
 }
 
 const tokenService = createTokenService(mcpTokenDb);
+const authService = createAuthService(userDb);
 
-module.exports = { login, ...tokenService, createTokenService };
+module.exports = {
+    login,
+    ...authService,
+    ...tokenService,
+    createAuthService,
+    createTokenService
+};

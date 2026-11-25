@@ -1,7 +1,64 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const { createTokenService } = require('../../src/services/auth.service');
+const {
+    createAuthService,
+    createTokenService
+} = require('../../src/services/auth.service');
+
+test('AC-7 signup creates a member with a password hash, never the plaintext password', async () => {
+    const createdUsers = [];
+    const password = 'correct horse battery staple';
+    const service = createAuthService({
+        async createUser(email, passwordHash) {
+            const user = { id: 21, email, passwordHash, role: 'member' };
+            createdUsers.push(user);
+            return user;
+        }
+    }, {
+        async hashPassword(value) {
+            assert.equal(value, password);
+            return 'salted-password-hash';
+        }
+    });
+
+    const user = await service.signup('new-member@example.com', password);
+
+    assert.deepEqual(user, {
+        id: 21,
+        email: 'new-member@example.com',
+        role: 'member'
+    });
+    assert.deepEqual(createdUsers, [{
+        id: 21,
+        email: 'new-member@example.com',
+        passwordHash: 'salted-password-hash',
+        role: 'member'
+    }]);
+    assert.notEqual(createdUsers[0].passwordHash, password);
+});
+
+test('AC-7 signup maps the email-taken data result to a domain error', async () => {
+    const service = createAuthService({
+        async createUser() {
+            return { error: 'EMAIL_TAKEN' };
+        }
+    }, {
+        async hashPassword() {
+            return 'salted-password-hash';
+        }
+    });
+
+    await assert.rejects(
+        service.signup('existing@example.com', 'password'),
+        (error) => {
+            assert.equal(error.code, 'EMAIL_TAKEN');
+            assert.equal(error.message, 'Email is already registered');
+            assert.equal(error.code.startsWith('23505'), false);
+            return true;
+        }
+    );
+});
 
 test('AC-15 a valid MCP token is hashed before lookup and returns its user', async () => {
     const token = 'member-token-for-tests';

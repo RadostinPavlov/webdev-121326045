@@ -72,6 +72,30 @@ async function assertServiceError(promise, code, message) {
     });
 }
 
+function createOrganizerFixture({ events = [], attendees = [] } = {}) {
+    const storedEvents = events.map((event) => ({ ...event }));
+    const storedAttendees = attendees.map((attendee) => ({ ...attendee }));
+    const data = {
+        async createEvent(event) {
+            const created = { id: storedEvents.length + 1, ...event };
+            storedEvents.push(created);
+            return created;
+        },
+        async getEventById(eventId) {
+            return storedEvents.find((event) => event.id === eventId) ?? null;
+        },
+        async getEventAttendees(eventId) {
+            return storedAttendees.filter((attendee) => attendee.eventId === eventId);
+        }
+    };
+
+    return {
+        service: createEventService(data),
+        events: storedEvents,
+        attendees: storedAttendees
+    };
+}
+
 test('listUpcomingEvents passes the member id through to the data layer', async () => {
     let requestedUserId;
     const events = [{ id: 1, registration_id: 12 }];
@@ -84,6 +108,91 @@ test('listUpcomingEvents passes the member id through to the data layer', async 
 
     assert.deepEqual(await service.listUpcomingEvents(100), events);
     assert.equal(requestedUserId, 100);
+});
+
+test('AC-4 an organizer creates an event with its title, date, capacity and owner', async () => {
+    const { service, events } = createOrganizerFixture();
+    const organizer = { id: 41, role: 'organizer' };
+    const input = {
+        title: 'Community Dinner',
+        date: new Date('2100-06-01T18:00:00.000Z'),
+        capacity: 24
+    };
+
+    const created = await service.createEvent(organizer, input);
+
+    assert.deepEqual(created, {
+        id: 1,
+        ...input,
+        organizerId: organizer.id
+    });
+    assert.deepEqual(events, [created]);
+});
+
+test('AC-4 createEvent rejects an empty title, invalid capacity, or non-future date', async () => {
+    const { service, events } = createOrganizerFixture();
+    const organizer = { id: 41, role: 'organizer' };
+    const validInput = {
+        title: 'Community Dinner',
+        date: new Date('2100-06-01T18:00:00.000Z'),
+        capacity: 24
+    };
+
+    for (const input of [
+        { ...validInput, title: '   ' },
+        { ...validInput, capacity: 0 },
+        { ...validInput, capacity: 1.5 },
+        { ...validInput, date: new Date('2000-01-01T00:00:00.000Z') }
+    ]) {
+        await assert.rejects(
+            service.createEvent(organizer, input),
+            (error) => error.code === 'VALIDATION_ERROR'
+        );
+    }
+
+    assert.deepEqual(events, []);
+});
+
+test('AC-5 only the event organizer can list attendees; missing events are not found', async () => {
+    const event = { id: 8, organizerId: 41 };
+    const attendees = [
+        { eventId: 8, userId: 101, email: 'member@example.com' }
+    ];
+    const { service } = createOrganizerFixture({ events: [event], attendees });
+
+    assert.deepEqual(
+        await service.listEventAttendees(8, { id: 41, role: 'organizer' }),
+        attendees
+    );
+    await assertServiceError(
+        service.listEventAttendees(8, { id: 42, role: 'organizer' }),
+        'FORBIDDEN',
+        'You are not allowed to view attendees for this event'
+    );
+    await assertServiceError(
+        service.listEventAttendees(999, { id: 41, role: 'organizer' }),
+        'EVENT_NOT_FOUND',
+        'Event not found'
+    );
+});
+
+test('AC-6 a member cannot create an event and no event is stored', async () => {
+    const { service, events } = createOrganizerFixture();
+
+    await assertServiceError(
+        service.createEvent(
+            { id: 42, role: 'member' },
+            {
+                title: 'Unauthorized Event',
+                date: new Date('2100-06-01T18:00:00.000Z'),
+                capacity: 24
+            }
+        ),
+        'FORBIDDEN',
+        'Only organizers can create events'
+    );
+
+    assert.deepEqual(events, []);
 });
 
 test('AC-1 a full event rejects registration without adding a row', async () => {

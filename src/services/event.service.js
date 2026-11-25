@@ -6,10 +6,56 @@ function createServiceError(code, message) {
     return error;
 }
 
+function validateNewEvent(input) {
+    const title = typeof input?.title === 'string' ? input.title.trim() : '';
+    const date = new Date(input?.date);
+    const capacity = input?.capacity;
+
+    if (
+        !title ||
+        Number.isNaN(date.getTime()) ||
+        date.getTime() <= Date.now() ||
+        !Number.isInteger(capacity) ||
+        capacity <= 0
+    ) {
+        throw createServiceError(
+            'VALIDATION_ERROR',
+            'Title, future date, and positive integer capacity are required'
+        );
+    }
+
+    return { title, date, capacity };
+}
+
 function createEventService(data) {
     return {
         async listUpcomingEvents(userId) {
             return data.getUpcomingEvents(userId);
+        },
+
+        async createEvent(user, input) {
+            if (user?.role !== 'organizer') {
+                throw createServiceError('FORBIDDEN', 'Only organizers can create events');
+            }
+
+            const event = validateNewEvent(input);
+            return data.createEvent({ ...event, organizerId: user.id });
+        },
+
+        async listEventAttendees(eventId, user) {
+            const event = await data.getEventById(eventId);
+            if (!event) {
+                throw createServiceError('EVENT_NOT_FOUND', 'Event not found');
+            }
+
+            if (user?.role !== 'organizer' || event.organizerId !== user.id) {
+                throw createServiceError(
+                    'FORBIDDEN',
+                    'You are not allowed to view attendees for this event'
+                );
+            }
+
+            return data.getEventAttendees(eventId);
         },
 
         async registerForEvent(eventId, userId) {
@@ -67,6 +113,9 @@ function createEventService(data) {
 
 const defaultService = createEventService({
     getUpcomingEvents: eventDb.getUpcomingEvents,
+    createEvent: eventDb.createEvent,
+    getEventById: eventDb.getEventById,
+    getEventAttendees: eventDb.getEventAttendees,
     withEventLock: eventDb.withEventLock,
     getRegistrationById: eventDb.getRegistrationById,
     deleteRegistration: eventDb.deleteRegistration
