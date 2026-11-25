@@ -1,4 +1,7 @@
-const { createModelClient } = require('../lib/model-client');
+const {
+    createModelClient,
+    ModelUnavailableError
+} = require('../lib/model-client');
 
 const DESCRIPTION_LIMIT = 1000;
 const IMAGE_LIMIT_BYTES = 4 * 1024 * 1024;
@@ -144,24 +147,26 @@ function emptyPosterResult(message) {
     };
 }
 
+function requireOrganizer(user) {
+    if (user?.role !== 'organizer') {
+        throw createServiceError('FORBIDDEN', 'Only organizers can use model assistance');
+    }
+}
+
 function createModelAssistanceService({
     client = createModelClient(),
     now = () => new Date()
 } = {}) {
     return {
-        async draftDescription(event) {
-            if (!client.isConfigured()) {
-                return {
-                    description: fallbackDescription(event),
-                    source: 'fallback',
-                    message: 'Suggested without the model'
-                };
-            }
-
+        async draftDescription(user, event) {
+            requireOrganizer(user);
             let result;
             try {
                 result = await client.generateText(createDescriptionPrompt(event));
-            } catch {
+            } catch (error) {
+                if (!(error instanceof ModelUnavailableError)) {
+                    throw error;
+                }
                 return {
                     description: fallbackDescription(event),
                     source: 'fallback',
@@ -180,12 +185,9 @@ function createModelAssistanceService({
             return { description: result.trim(), source: 'model' };
         },
 
-        async extractFromPoster(image) {
+        async extractFromPoster(user, image) {
+            requireOrganizer(user);
             decodeImage(image);
-            if (!client.isConfigured()) {
-                return emptyPosterResult(MODEL_UNAVAILABLE_MESSAGE);
-            }
-
             let response;
             try {
                 response = await client.generateJson(
@@ -193,7 +195,10 @@ function createModelAssistanceService({
                     'Return only a JSON object with those five fields. Do not guess missing values.',
                     image
                 );
-            } catch {
+            } catch (error) {
+                if (!(error instanceof ModelUnavailableError)) {
+                    throw error;
+                }
                 return emptyPosterResult(MODEL_UNAVAILABLE_MESSAGE);
             }
 

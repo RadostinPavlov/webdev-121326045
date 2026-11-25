@@ -3,6 +3,11 @@ const assert = require('node:assert/strict');
 const {
     createModelAssistanceService
 } = require('../../src/services/model-assistance.service');
+const {
+    ModelUnavailableError
+} = require('../../src/lib/model-client');
+
+const organizer = { id: 300, role: 'organizer' };
 
 function createFakeClient({
     configured = true,
@@ -20,6 +25,9 @@ function createFakeClient({
             },
             async generateText(prompt) {
                 calls.push({ type: 'text', prompt });
+                if (!configured) {
+                    throw new ModelUnavailableError('missing_key');
+                }
                 if (textError) {
                     throw textError;
                 }
@@ -27,6 +35,9 @@ function createFakeClient({
             },
             async generateJson(prompt, image) {
                 calls.push({ type: 'json', prompt, image });
+                if (!configured) {
+                    throw new ModelUnavailableError('missing_key');
+                }
                 if (jsonError) {
                     throw jsonError;
                 }
@@ -55,7 +66,7 @@ test('AC-20 description draft uses event details and returns an editable model r
         notes: 'Bring questions'
     };
 
-    const result = await service.draftDescription(event);
+    const result = await service.draftDescription(organizer, event);
 
     assert.deepEqual(result, {
         description: 'Join us for a welcoming evening.',
@@ -76,8 +87,8 @@ test('AC-21 description draft falls back for missing key, timeout, rate limit, a
     };
     const cases = [
         { configured: false },
-        { textError: Object.assign(new Error('timed out'), { name: 'AbortError' }) },
-        { textError: Object.assign(new Error('rate limited'), { status: 429 }) },
+        { textError: new ModelUnavailableError('timeout') },
+        { textError: new ModelUnavailableError('rate_limited') },
         { textResult: '' },
         { textResult: 'x'.repeat(1001) }
     ];
@@ -85,13 +96,13 @@ test('AC-21 description draft falls back for missing key, timeout, rate limit, a
     for (const options of cases) {
         const { client, calls } = createFakeClient(options);
         const service = createModelAssistanceService({ client });
-        const result = await service.draftDescription(event);
+        const result = await service.draftDescription(organizer, event);
 
         assert.equal(result.source, 'fallback');
         assert.equal(result.message, 'Suggested without the model');
         assert.match(result.description, /Open Day/);
         assert.match(result.description, /Club Hall/);
-        assert.equal(calls.length, options.configured === false ? 0 : 1);
+        assert.equal(calls.length, 1);
     }
 });
 
@@ -100,7 +111,7 @@ test('AC-22 poster extraction returns editable structured fields from a PNG', as
     const service = createModelAssistanceService({ client });
     const image = validPng();
 
-    const result = await service.extractFromPoster(image);
+    const result = await service.extractFromPoster(organizer, image);
 
     assert.deepEqual(result, {
         title: 'Open Day',
@@ -116,7 +127,7 @@ test('AC-22 poster extraction returns editable structured fields from a PNG', as
         mimeType: 'image/jpeg',
         data: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64')
     };
-    assert.equal((await service.extractFromPoster(jpeg)).source, 'model');
+    assert.equal((await service.extractFromPoster(organizer, jpeg)).source, 'model');
 });
 
 test('AC-22 poster extraction rejects non-PNG/JPEG and images larger than 4 MB', async () => {
@@ -136,7 +147,7 @@ test('AC-22 poster extraction rejects non-PNG/JPEG and images larger than 4 MB',
 
     for (const image of invalidImages) {
         await assert.rejects(
-            service.extractFromPoster(image),
+            service.extractFromPoster(organizer, image),
             (error) => error.code === 'INVALID_IMAGE'
         );
     }
@@ -146,14 +157,14 @@ test('AC-22 poster extraction rejects non-PNG/JPEG and images larger than 4 MB',
 test('AC-22 poster extraction returns empty fields when the key is missing, times out, or is rate limited', async () => {
     const cases = [
         { configured: false },
-        { jsonError: Object.assign(new Error('timed out'), { name: 'AbortError' }) },
-        { jsonError: Object.assign(new Error('rate limited'), { status: 429 }) }
+        { jsonError: new ModelUnavailableError('timeout') },
+        { jsonError: new ModelUnavailableError('rate_limited') }
     ];
 
     for (const options of cases) {
         const { client, calls } = createFakeClient(options);
         const service = createModelAssistanceService({ client });
-        const result = await service.extractFromPoster(validPng());
+        const result = await service.extractFromPoster(organizer, validPng());
 
         assert.deepEqual(result, {
             title: '',
@@ -164,7 +175,7 @@ test('AC-22 poster extraction returns empty fields when the key is missing, time
             source: 'fallback',
             message: 'The model is unavailable. Please fill in the form by hand.'
         });
-        assert.equal(calls.length, options.configured === false ? 0 : 1);
+        assert.equal(calls.length, 1);
     }
 });
 
@@ -181,7 +192,7 @@ test('AC-23 past or impossible dates and invalid capacities stay empty for manua
         });
         const service = createModelAssistanceService({ client });
 
-        const result = await service.extractFromPoster(validPng());
+        const result = await service.extractFromPoster(organizer, validPng());
 
         assert.equal(result.title, 'Open Day');
         assert.equal(result.date, '');
@@ -189,6 +200,60 @@ test('AC-23 past or impossible dates and invalid capacities stay empty for manua
         assert.equal(result.message, 'Please fill in the date and capacity by hand.');
         assert.equal(result.source, 'model');
     }
+});
+
+test('AC-24 model assistance rejects non-organizers before contacting the client', async () => {
+    let clientCalls = 0;
+    const service = createModelAssistanceService({
+        client: {
+            isConfigured() {
+                clientCalls += 1;
+                return true;
+            },
+            async generateText() {
+                clientCalls += 1;
+            },
+            async generateJson() {
+                clientCalls += 1;
+            }
+        }
+    });
+
+    await assert.rejects(
+        service.draftDescription({ id: 100, role: 'member' }, { title: 'Event' }),
+        { code: 'FORBIDDEN' }
+    );
+    await assert.rejects(
+        service.extractFromPoster(
+            { id: 100, role: 'member' },
+            validPng()
+        ),
+        { code: 'FORBIDDEN' }
+    );
+    assert.equal(clientCalls, 0);
+});
+
+test('model assistance propagates unexpected client errors instead of falling back', async () => {
+    const failure = new TypeError('Unexpected client failure');
+    const service = createModelAssistanceService({
+        client: {
+            async generateText() {
+                throw failure;
+            },
+            async generateJson() {
+                throw failure;
+            }
+        }
+    });
+
+    await assert.rejects(
+        service.draftDescription(organizer, { title: 'Open Day' }),
+        (error) => error === failure
+    );
+    await assert.rejects(
+        service.extractFromPoster(organizer, validPng()),
+        (error) => error === failure
+    );
 });
 
 test('AC-22 invalid structured output returns empty fields or identifies invalid fields', async () => {
@@ -219,7 +284,7 @@ test('AC-22 invalid structured output returns empty fields or identifies invalid
     for (const scenario of cases) {
         const { client } = createFakeClient({ jsonResult: scenario.response });
         const service = createModelAssistanceService({ client });
-        const result = await service.extractFromPoster(validPng());
+        const result = await service.extractFromPoster(organizer, validPng());
 
         assert.equal(result.source, scenario.source);
         assert.equal(result.title, '');

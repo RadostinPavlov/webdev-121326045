@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createModelClient } = require('../../src/lib/model-client');
+const {
+    createModelClient,
+    ModelUnavailableError
+} = require('../../src/lib/model-client');
 
 function modelResponse(text) {
     return {
@@ -52,7 +55,7 @@ test('model client sends inline image data and requests JSON output', async () =
     assert.equal(requestBody.generationConfig.responseMimeType, 'application/json');
 });
 
-test('model client reports missing configuration without making a request', async () => {
+test('model client reports a missing API key without making a request', async () => {
     let fetchCalled = false;
     const client = createModelClient({
         getConfig: () => ({ apiKey: '', modelName: 'test-model' }),
@@ -62,13 +65,15 @@ test('model client reports missing configuration without making a request', asyn
     });
 
     assert.equal(client.isConfigured(), false);
-    await assert.rejects(client.generateText('Write a draft'), {
-        code: 'MODEL_NOT_CONFIGURED'
+    await assert.rejects(client.generateText('Write a draft'), (error) => {
+        assert.ok(error instanceof ModelUnavailableError);
+        assert.equal(error.reason, 'missing_key');
+        return true;
     });
     assert.equal(fetchCalled, false);
 });
 
-test('model client aborts a request when its timeout expires', async () => {
+test('model client classifies an aborted request as a timeout', async () => {
     const client = createModelClient({
         getConfig: () => ({ apiKey: 'test-key', modelName: 'test-model' }),
         timeoutMs: 5,
@@ -81,7 +86,43 @@ test('model client aborts a request when its timeout expires', async () => {
         })
     });
 
-    await assert.rejects(client.generateText('Write a draft'), {
-        name: 'AbortError'
+    await assert.rejects(client.generateText('Write a draft'), (error) => {
+        assert.ok(error instanceof ModelUnavailableError);
+        assert.equal(error.reason, 'timeout');
+        assert.equal(error.cause.name, 'AbortError');
+        return true;
     });
+});
+
+test('model client classifies HTTP 429 as rate limited', async () => {
+    const client = createModelClient({
+        getConfig: () => ({ apiKey: 'test-key', modelName: 'test-model' }),
+        fetchImpl: async () => ({ ok: false, status: 429 })
+    });
+
+    await assert.rejects(client.generateText('Write a draft'), (error) => {
+        assert.ok(error instanceof ModelUnavailableError);
+        assert.equal(error.reason, 'rate_limited');
+        return true;
+    });
+});
+
+test('model client classifies fetch and provider failures as network unavailable', async () => {
+    for (const fetchImpl of [
+        async () => {
+            throw new TypeError('Network connection failed');
+        },
+        async () => ({ ok: false, status: 503 })
+    ]) {
+        const client = createModelClient({
+            getConfig: () => ({ apiKey: 'test-key', modelName: 'test-model' }),
+            fetchImpl
+        });
+
+        await assert.rejects(client.generateText('Write a draft'), (error) => {
+            assert.ok(error instanceof ModelUnavailableError);
+            assert.equal(error.reason, 'network');
+            return true;
+        });
+    }
 });

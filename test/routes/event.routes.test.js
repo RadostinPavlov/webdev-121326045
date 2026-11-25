@@ -5,6 +5,9 @@ const { once } = require('node:events');
 const session = require('express-session');
 const { createApp } = require('../../src/app');
 const { createEventService } = require('../../src/services/event.service');
+const {
+    createModelAssistanceService
+} = require('../../src/services/model-assistance.service');
 
 const SESSION_SECRET = 'route-tests-only-secret';
 
@@ -21,6 +24,7 @@ function createHarness({
     registrations = [],
     attendees = [],
     eventService: injectedEventService,
+    modelAssistanceService: injectedModelAssistanceService,
     authService: injectedAuthService
 } = {}) {
     const eventRows = new Map(events.map((event) => [event.id, { ...event }]));
@@ -87,6 +91,9 @@ function createHarness({
     const store = new session.MemoryStore();
     const app = createApp({
         eventService: service,
+        ...(injectedModelAssistanceService
+            ? { modelAssistanceService: injectedModelAssistanceService }
+            : {}),
         ...(injectedAuthService ? { authService: injectedAuthService } : {}),
         sessionOptions: {
             store,
@@ -530,6 +537,232 @@ test('AC-4 and AC-6 event creation checks session before the service and maps it
             error: 'Only organizers can create events'
         });
         assert.equal(serviceCalls, 1);
+    });
+});
+
+test('AC-20 description draft route returns a draft from the service for an organizer', async (t) => {
+    const calls = [];
+    const modelAssistanceService = {
+        async draftDescription(user, event) {
+            calls.push({ user, event });
+            return { description: 'Editable draft', source: 'model' };
+        }
+    };
+
+    await withHarness(t, { modelAssistanceService }, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 300, role: 'organizer' });
+        const event = {
+            title: 'Community Dinner',
+            date: futureDate(60).toISOString(),
+            time: '18:30',
+            venue: 'Club Hall',
+            audience: 'members',
+            notes: 'Bring a dish'
+        };
+        const response = await request(
+            harness,
+            '/api/events/description-draft',
+            jsonOptions('POST', cookie, event)
+        );
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), {
+            description: 'Editable draft',
+            source: 'model'
+        });
+        assert.deepEqual(calls, [{ user: { id: 300, role: 'organizer' }, event }]);
+    });
+});
+
+test('AC-21 description draft route returns the service fallback message', async (t) => {
+    const modelAssistanceService = {
+        async draftDescription() {
+            return {
+                description: 'Join us for Community Dinner at Club Hall.',
+                source: 'fallback',
+                message: 'Suggested without the model'
+            };
+        }
+    };
+
+    await withHarness(t, { modelAssistanceService }, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 300, role: 'organizer' });
+        const response = await request(
+            harness,
+            '/api/events/description-draft',
+            jsonOptions('POST', cookie, { title: 'Community Dinner' })
+        );
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), {
+            description: 'Join us for Community Dinner at Club Hall.',
+            source: 'fallback',
+            message: 'Suggested without the model'
+        });
+    });
+});
+
+test('AC-22 poster extraction route accepts an image JSON body larger than 100 KB', async (t) => {
+    const calls = [];
+    const modelAssistanceService = {
+        async extractFromPoster(user, image) {
+            calls.push({ user, image });
+            return {
+                title: 'Open Day',
+                date: '2099-06-12',
+                time: '18:30',
+                venue: 'Club Hall',
+                capacity: 40,
+                source: 'model'
+            };
+        }
+    };
+
+    await withHarness(t, { modelAssistanceService }, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 300, role: 'organizer' });
+        const imageBytes = Buffer.alloc(160 * 1024);
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(imageBytes);
+        const image = {
+            mimeType: 'image/png',
+            data: imageBytes.toString('base64')
+        };
+        const body = JSON.stringify(image);
+        assert.ok(Buffer.byteLength(body) > 100 * 1024);
+
+        const response = await request(
+            harness,
+            '/api/events/poster-extraction',
+            {
+                method: 'POST',
+                headers: {
+                    Cookie: cookie,
+                    'Content-Type': 'application/json'
+                },
+                body
+            }
+        );
+
+        assert.equal(response.status, 200);
+        assert.equal((await response.json()).title, 'Open Day');
+        assert.deepEqual(calls, [{ user: { id: 300, role: 'organizer' }, image }]);
+    });
+});
+
+test('AC-22 poster extraction maps an invalid image from the service to 400', async (t) => {
+    const modelAssistanceService = createModelAssistanceService({
+        client: {
+            isConfigured() {
+                throw new Error('Invalid images must be rejected before the client');
+            }
+        }
+    });
+
+    await withHarness(t, { modelAssistanceService }, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 300, role: 'organizer' });
+        const response = await request(
+            harness,
+            '/api/events/poster-extraction',
+            jsonOptions('POST', cookie, {
+                mimeType: 'image/gif',
+                data: 'R0lGODlh'
+            })
+        );
+
+        assert.equal(response.status, 400);
+        assert.deepEqual(await response.json(), { error: 'Upload a PNG or JPEG poster' });
+    });
+});
+
+test('AC-23 poster extraction returns invalid date and capacity fields for manual entry', async (t) => {
+    const modelAssistanceService = {
+        async extractFromPoster() {
+            return {
+                title: 'Open Day',
+                date: '',
+                time: '18:30',
+                venue: 'Club Hall',
+                capacity: '',
+                source: 'model',
+                message: 'Please fill in the date and capacity by hand.'
+            };
+        }
+    };
+
+    await withHarness(t, { modelAssistanceService }, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 300, role: 'organizer' });
+        const response = await request(
+            harness,
+            '/api/events/poster-extraction',
+            jsonOptions('POST', cookie, {
+                mimeType: 'image/png',
+                data: 'iVBORw0KGgoAAAAA'
+            })
+        );
+
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), {
+            title: 'Open Day',
+            date: '',
+            time: '18:30',
+            venue: 'Club Hall',
+            capacity: '',
+            source: 'model',
+            message: 'Please fill in the date and capacity by hand.'
+        });
+    });
+});
+
+test('AC-24 model assistance routes return 401 without a session and service 403 for members', async (t) => {
+    let clientCalls = 0;
+    const modelAssistanceService = createModelAssistanceService({
+        client: {
+            isConfigured() {
+                clientCalls += 1;
+                return true;
+            },
+            async generateText() {
+                clientCalls += 1;
+                return 'Draft';
+            },
+            async generateJson() {
+                clientCalls += 1;
+                return '{}';
+            }
+        }
+    });
+
+    await withHarness(t, { modelAssistanceService }, async (harness) => {
+        const body = {
+            title: 'Community Dinner',
+            mimeType: 'image/png',
+            data: 'iVBORw0KGgoAAAAA'
+        };
+        for (const [path, payload] of [
+            ['/api/events/description-draft', body],
+            ['/api/events/poster-extraction', {
+                mimeType: body.mimeType,
+                data: body.data
+            }]
+        ]) {
+            const unauthenticated = await request(
+                harness,
+                path,
+                jsonOptions('POST', null, payload)
+            );
+            assert.equal(unauthenticated.status, 401);
+
+            const memberCookie = await harness.cookieFor({ id: 100, role: 'member' });
+            const forbidden = await request(
+                harness,
+                path,
+                jsonOptions('POST', memberCookie, payload)
+            );
+            assert.equal(forbidden.status, 403);
+            assert.deepEqual(await forbidden.json(), {
+                error: 'Only organizers can use model assistance'
+            });
+        }
+        assert.equal(clientCalls, 0);
     });
 });
 

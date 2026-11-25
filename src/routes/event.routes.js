@@ -1,4 +1,5 @@
 const express = require('express');
+const modelAssistanceService = require('../services/model-assistance.service');
 
 function parseId(value) {
     if (!/^[1-9]\d*$/.test(value)) {
@@ -12,6 +13,7 @@ function parseId(value) {
 function sendServiceError(res, error) {
     const statusByCode = {
         VALIDATION_ERROR: 400,
+        INVALID_IMAGE: 400,
         EVENT_NOT_FOUND: 404,
         FORBIDDEN: 403,
         EMAIL_TAKEN: 409,
@@ -31,8 +33,49 @@ function sendServiceError(res, error) {
     return res.status(status).json({ error: error.message });
 }
 
-function createEventRouter(eventService) {
+function createEventRouter(
+    eventService,
+    injectedModelAssistanceService = modelAssistanceService
+) {
     const router = express.Router();
+
+    router.post('/description-draft', async (req, res) => {
+        if (!req.session.user) {
+            return res.status(401).json({ error: 'Not signed in' });
+        }
+
+        try {
+            const result = await injectedModelAssistanceService.draftDescription(
+                req.session.user,
+                req.body
+            );
+            return res.json(result);
+        } catch (error) {
+            return sendServiceError(res, error);
+        }
+    });
+
+    router.post(
+        '/poster-extraction',
+        (req, res, next) => {
+            if (!req.session.user) {
+                return res.status(401).json({ error: 'Not signed in' });
+            }
+            return next();
+        },
+        express.json({ limit: '6mb' }),
+        async (req, res) => {
+            try {
+                const result = await injectedModelAssistanceService.extractFromPoster(
+                    req.session.user,
+                    req.body
+                );
+                return res.json(result);
+            } catch (error) {
+                return sendServiceError(res, error);
+            }
+        }
+    );
 
     router.get('/', async (req, res) => {
         if (!req.session.user) {

@@ -1,6 +1,24 @@
 const API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+class ModelUnavailableError extends Error {
+    constructor(reason, cause) {
+        const messages = {
+            timeout: 'Model request timed out',
+            rate_limited: 'Model provider is rate-limited',
+            missing_key: 'Model API key is not configured',
+            network: 'Model provider is unavailable'
+        };
+        super(messages[reason] ?? messages.network);
+        this.name = 'ModelUnavailableError';
+        this.code = 'MODEL_UNAVAILABLE';
+        this.reason = reason;
+        if (cause !== undefined) {
+            this.cause = cause;
+        }
+    }
+}
+
 function createModelClient({
     fetchImpl = globalThis.fetch,
     getConfig = () => ({
@@ -16,17 +34,22 @@ function createModelClient({
 
     async function generate(parts, responseMimeType) {
         const { apiKey, modelName } = getConfig();
-        if (!apiKey || !modelName) {
-            const error = new Error('Model client is not configured');
-            error.code = 'MODEL_NOT_CONFIGURED';
-            throw error;
+        if (!apiKey) {
+            throw new ModelUnavailableError('missing_key');
+        }
+        if (!modelName) {
+            throw new ModelUnavailableError('network');
         }
         if (typeof fetchImpl !== 'function') {
-            throw new TypeError('Fetch is not available');
+            throw new ModelUnavailableError('network');
         }
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        let timedOut = false;
+        const timeout = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, timeoutMs);
 
         try {
             const response = await fetchImpl(
@@ -48,9 +71,10 @@ function createModelClient({
             );
 
             if (!response.ok) {
-                const error = new Error(`Model request failed with status ${response.status}`);
-                error.status = response.status;
-                throw error;
+                if (response.status === 429) {
+                    throw new ModelUnavailableError('rate_limited');
+                }
+                throw new ModelUnavailableError('network');
             }
 
             const result = await response.json();
@@ -58,10 +82,15 @@ function createModelClient({
                 ?.map((part) => part.text)
                 .filter((part) => typeof part === 'string')
                 .join('');
-            if (typeof text !== 'string' || !text.trim()) {
-                throw new Error('Model response did not contain text');
+            return typeof text === 'string' ? text : '';
+        } catch (error) {
+            if (error instanceof ModelUnavailableError) {
+                throw error;
             }
-            return text;
+            if (timedOut || error?.name === 'AbortError') {
+                throw new ModelUnavailableError('timeout', error);
+            }
+            throw new ModelUnavailableError('network', error);
         } finally {
             clearTimeout(timeout);
         }
@@ -86,4 +115,4 @@ function createModelClient({
     };
 }
 
-module.exports = { createModelClient };
+module.exports = { createModelClient, ModelUnavailableError };
