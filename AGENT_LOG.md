@@ -154,6 +154,7 @@ Updated Slice 2 plan. Grounded in SPEC.md and AGENTS.md. No files changed.
   - step 8: wrote the architecture note in SPEC.md; then asked Copilot only to check the named files; it found one wrong sentence (the UNIQUE constraint comes from migration 001, not 002), which I corrected; no files changed by the agent
     - step 9: read the whole feature diff since ab22335 (git diff --stat and git diff): 21 files, 1535 insertions, 134 deletions; summary in "What does the agent do without my order?" below
 - Went wrong: Copilot also filled the Traceability table in SPEC.md, which I did not ask for and which listed only the route tests; I undid that file. The test for cancelling an owned registration has no AC-13 in its title; in step 5 Copilot changed one assertion in the AC-10 route test: it checked that events.html contains fetch('/api/events'), and now checks that the page loads events-view.js and events.js, because the fetch moved into events.js as the plan required; the other AC-10 assertions are unchanged. It also added a service test I did not ask for
+- MCP: three tools list_upcoming_events, register_for_event, cancel_registration call event.service.js; caller found by a SHA-256 hash of MCP_TOKEN (migration 003); a real run against the database listed the three events, a wrong argument and a missing token returned isError results; check.mjs 12/12; committed
 - Changed by hand: –
 
 
