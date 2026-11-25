@@ -71,6 +71,24 @@ Club events
 ## Architecture
 <!-- Exercise 3. One request traced through every layer, naming the file for each one,
      plus one place where your own code does not match this layering. -->
+     ### One request: a member presses Register
+
+**Browser**
+1. View: `src/views/events.html` loads `src/public/js/events-view.js` and `src/public/js/events.js`. `events-view.js` is a pure module: given a state (loading, list, empty, error) it returns what to show, with no fetch and no DOM access.
+2. State and REST call: `src/public/js/events.js` handles the click and sends `POST /api/events/:eventId/registrations` with the session cookie. ⚠️
+
+**Server**
+3. App: `src/app.js` builds the Express app, attaches the session from the PostgreSQL `session` table (connect-pg-simple), and mounts the routers.
+4. Route: `src/routes/event.routes.js` checks `req.session.user` first and returns 401 without calling the service. It parses the event id (400 if invalid), calls `registerForEvent(eventId, userId)` and maps the service's error codes to status codes: EVENT_NOT_FOUND → 404, EVENT_STARTED, ALREADY_REGISTERED and EVENT_FULL → 409, otherwise 500. It holds no rule of its own.
+5. Service: `src/services/event.service.js` holds the rules. Inside `withEventLock` it checks, in order, that the event exists, has not started, that the member is not already registered, and that a place is free; only then does it ask for the row to be inserted. It knows nothing about HTTP or SQL.
+6. Data: `src/db/event.db.js` is the only layer with SQL. `withEventLock` opens a transaction, locks the event row with `SELECT … FOR UPDATE`, gives the service the locked event and the registration queries, and commits, or rolls back on any error. Two members asking for the last place are served one after the other.
+7. Database: `events` and `registrations`. `UNIQUE (event_id, user_id)` (migration 001) and `CHECK (capacity > 0)` (migration 002) still hold if the code has a bug.
+
+**Back to the browser**
+The route answers 201 `{"message":"You are registered"}` or the error with its status. `events.js` shows the message, goes to `/login` on 401, and reloads the list so free places and the Register/Cancel button are current. ⚠️
+
+### Where the code does not follow the layering
+`src/db/seed.js` belongs to the data layer but imports `hashPassword` from `src/services/password.js`, so the data layer depends on the service layer, the opposite of the intended direction. I left it because the seed is a development script, not part of the request path; the right fix is to move the password helpers to a shared module such as `src/lib/password.js`.
 
 ## Acceptance criteria
 <!-- Every criterion carries an id. A test proves it by naming that id in its title, for example
