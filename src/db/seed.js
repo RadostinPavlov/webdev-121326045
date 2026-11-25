@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const pool = require('./db');
 const { hashPassword } = require('../services/password');
 
@@ -7,7 +8,9 @@ async function seed() {
         await client.query('BEGIN');
 
         // Clear existing data
-        await client.query('TRUNCATE users, events, registrations, "session" RESTART IDENTITY CASCADE');
+        await client.query(
+            'TRUNCATE users, events, registrations, mcp_tokens, "session" RESTART IDENTITY CASCADE'
+        );
 
         // Seed users
         const passwordHash = await hashPassword('password123');
@@ -22,6 +25,21 @@ async function seed() {
                 'INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)',
                 [email, passwordHash, role]
             );
+        }
+
+        if (process.env.MCP_TOKEN) {
+            const tokenHash = crypto
+                .createHash('sha256')
+                .update(process.env.MCP_TOKEN, 'utf8')
+                .digest('hex');
+            await client.query(
+                `INSERT INTO mcp_tokens (user_id, token_hash)
+                 SELECT id, $1 FROM users WHERE email = $2`,
+                [tokenHash, 'member@example.com']
+            );
+            console.log('Seeded MCP token for member@example.com.');
+        } else {
+            console.log('MCP_TOKEN is not set; skipped seeding MCP token.');
         }
 
         // Seed events

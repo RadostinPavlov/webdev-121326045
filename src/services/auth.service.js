@@ -1,4 +1,6 @@
+const crypto = require('node:crypto');
 const userDb = require('../db/user.db');
+const mcpTokenDb = require('../db/mcp-token.db');
 const passwordService = require('./password');
 
 async function login(email, password) {
@@ -16,4 +18,28 @@ async function login(email, password) {
     return { id: user.id, email: user.email, role: user.role };
 }
 
-module.exports = { login };
+function createTokenService(data) {
+    return {
+        async getUserForToken(token) {
+            if (typeof token !== 'string' || token.length === 0) {
+                return null;
+            }
+
+            const tokenHash = crypto
+                .createHash('sha256')
+                .update(token, 'utf8')
+                .digest('hex');
+            const user = await data.findUserByTokenHash(tokenHash);
+
+            if (!user) {
+                return null;
+            }
+
+            return { id: user.id, email: user.email, role: user.role };
+        }
+    };
+}
+
+const tokenService = createTokenService(mcpTokenDb);
+
+module.exports = { login, ...tokenService, createTokenService };
