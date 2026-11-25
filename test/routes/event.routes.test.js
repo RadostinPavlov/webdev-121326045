@@ -18,14 +18,15 @@ function createHarness({
         { id: 2, title: 'Film Night', date: futureDate(10), capacity: 8 },
         { id: 3, title: 'Board Games', date: futureDate(15), capacity: 12 }
     ],
-    registrations = []
+    registrations = [],
+    eventService: injectedEventService
 } = {}) {
     const eventRows = new Map(events.map((event) => [event.id, { ...event }]));
     const registrationRows = registrations.map((registration) => ({ ...registration }));
     let nextRegistrationId =
         Math.max(0, ...registrationRows.map((registration) => registration.id)) + 1;
 
-    const service = createEventService({
+    const defaultService = createEventService({
         async getUpcomingEvents() {
             return [...eventRows.values()]
                 .filter((event) => new Date(event.date).getTime() >= Date.now())
@@ -67,6 +68,7 @@ function createHarness({
             }
         }
     });
+    const service = injectedEventService ?? defaultService;
     const store = new session.MemoryStore();
     const app = createApp({
         eventService: service,
@@ -285,7 +287,20 @@ test('AC-12 the root redirects to /events and visitors are then sent to /login',
 });
 
 test('AC-14 cancelling another member registration returns 403 and keeps the row', async (t) => {
+    const serviceCalls = [];
+    const serviceError = Object.assign(
+        new Error('You are not allowed to cancel this registration'),
+        { code: 'REGISTRATION_FORBIDDEN' }
+    );
+    const eventService = {
+        async cancelRegistration(registrationId, userId) {
+            serviceCalls.push(['cancelRegistration', registrationId, userId]);
+            throw serviceError;
+        }
+    };
+
     await withHarness(t, {
+        eventService,
         registrations: [{ id: 10, eventId: 1, userId: 100 }]
     }, async (harness) => {
         const cookie = await harness.cookieFor({ id: 200 });
@@ -296,6 +311,11 @@ test('AC-14 cancelling another member registration returns 403 and keeps the row
         );
 
         assert.equal(response.status, 403);
+        assert.deepEqual(
+            await response.json(),
+            { error: 'You are not allowed to cancel this registration' }
+        );
+        assert.deepEqual(serviceCalls, [['cancelRegistration', 10, 200]]);
         assert.deepEqual(harness.registrationRows, [
             { id: 10, eventId: 1, userId: 100 }
         ]);
@@ -335,7 +355,18 @@ test('cancelling a missing registration returns 404', async (t) => {
 });
 
 test('AC-15 registration and cancellation without a session return 401 unchanged', async (t) => {
+    const serviceCalls = [];
+    const eventService = {
+        async registerForEvent(...args) {
+            serviceCalls.push(['registerForEvent', ...args]);
+        },
+        async cancelRegistration(...args) {
+            serviceCalls.push(['cancelRegistration', ...args]);
+        }
+    };
+
     await withHarness(t, {
+        eventService,
         registrations: [{ id: 10, eventId: 1, userId: 100 }]
     }, async (harness) => {
         const before = structuredClone(harness.registrationRows);
@@ -352,6 +383,7 @@ test('AC-15 registration and cancellation without a session return 401 unchanged
 
         assert.equal(registerResponse.status, 401);
         assert.equal(cancelResponse.status, 401);
+        assert.deepEqual(serviceCalls, []);
         assert.deepEqual(harness.registrationRows, before);
     });
 });
