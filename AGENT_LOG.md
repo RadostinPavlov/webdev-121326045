@@ -138,7 +138,7 @@ Updated Slice 2 plan. Grounded in SPEC.md and AGENTS.md. No files changed.
 - Checkpoints:
   - step 1: db:migrate ran twice on a fresh empty database without errors; schema_migrations lists 001 and 002; registrations has created_at, the event_id index and UNIQUE (event_id, user_id); db:setup seeds 3 users and 3 events; check.mjs 12/12, ex2 32/32; committed
   - step 2: after the service, npm test pass 7, fail 0; service has no SQL; BEGIN and FOR UPDATE are in src/db/event.db.js; tests unchanged; committed
-- Went wrong: schema.sql was left with one line instead of being deleted; the plan promised a concurrent-capacity test in the service tests, but none was written (a fake cannot prove the row lock anyway; FOR UPDATE is in src/db/event.db.js)
+- Went wrong: the plan promised a concurrent-capacity test in the service tests, but none was written (a fake cannot prove the row lock anyway; FOR UPDATE is in src/db/event.db.js)
 - Changed by hand: –
 
 
@@ -152,5 +152,18 @@ Updated Slice 2 plan. Grounded in SPEC.md and AGENTS.md. No files changed.
   - step 6: commented out the capacity rule in event.service.js; npm test failed exactly the two AC-1 tests (route: 201 instead of 409; service: missing EVENT_FULL rejection), the other 26 passed; restored with git restore, npm test pass 28; pushed; CI test job greenpushed; CI test, mcp and spec jobs green, coverage red as expected until Exercise 4
   - step 7: by hand with curl, two users, cookies in /tmp (deleted afterwards), the Yoga event set to capacity 1: A registers 201; B on the full event 409 "This event is full"; no cookie 401; B cancels A's registration 403; no cookie on cancel 401
   - step 8: wrote the architecture note in SPEC.md; then asked Copilot only to check the named files; it found one wrong sentence (the UNIQUE constraint comes from migration 001, not 002), which I corrected; no files changed by the agent
+    - step 9: read the whole feature diff since ab22335 (git diff --stat and git diff): 21 files, 1535 insertions, 134 deletions; summary in "What does the agent do without my order?" below
 - Went wrong: Copilot also filled the Traceability table in SPEC.md, which I did not ask for and which listed only the route tests; I undid that file. The test for cancelling an owned registration has no AC-13 in its title; in step 5 Copilot changed one assertion in the AC-10 route test: it checked that events.html contains fetch('/api/events'), and now checks that the page loads events-view.js and events.js, because the fetch moved into events.js as the plan required; the other AC-10 assertions are unchanged. It also added a service test I did not ask for
 - Changed by hand: –
+
+
+## Какво направи агентът без моя поръчка (What the agent did unasked)
+Read with `git diff --stat ab22335 HEAD` and `git diff ab22335 HEAD` (ab22335 is the last Exercise 2 commit): 21 files changed, 1535 insertions, 134 deletions; every file is one the plan named.
+
+- Extra files: none. `src/db/schema.sql` was moved to `src/db/migrations/001_init.sql` (git shows it as a rename with 4 changed lines, the removed `WITH (OIDS=FALSE)` among them); I first misread the editor's view of the move as a leftover file.
+- Extra test: in step 5 Copilot added a service test, "listUpcomingEvents passes the member id through to the data layer", that I did not ask for. Kept, because it checks that the Cancel button gets the right member's registration.
+- Changed tests: in step 4 it strengthened the existing AC-15 route test with a spy service instead of adding a new test (kept, because it only adds the check that the service is never called); in step 5 it replaced one assertion in the AC-10 route test, from "events.html contains fetch('/api/events')" to "the page loads events-view.js and events.js", because the fetch moved into events.js as the plan required (kept; the other AC-10 assertions are unchanged).
+- Unasked spec change: in step 3 it filled the Traceability table in `SPEC.md` with only the route test file. Removed with Undo; I fill the table myself.
+- Missing work: the plan promised a concurrent-capacity test in the service tests, but none was written. Not added: a fake cannot prove the row lock; the lock is `SELECT … FOR UPDATE` in `src/db/event.db.js`.
+- Additions approved in the plan: 400 for an invalid id, and each event's `registrationId` for the signed-in member so the page knows what Cancel deletes. Kept.
+- Dependencies: none added; `package.json` only got the `db:migrate` and `test` scripts I asked for.
