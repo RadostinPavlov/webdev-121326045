@@ -207,7 +207,7 @@ test('AC-6 a member cannot create an event and no event is stored', async () => 
     assert.deepEqual(events, []);
 });
 
-test.skip('AC-1 a full event rejects registration without adding a row', async () => {
+test('AC-1 a full event rejects registration without adding a row', async () => {
     const registration = { id: 10, eventId: 1, userId: 100 };
     const { service, registrations } = createFixture({
         event: futureEvent(),
