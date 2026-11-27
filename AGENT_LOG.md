@@ -176,3 +176,16 @@ Read with `git diff --stat ab22335 HEAD` and `git diff ab22335 HEAD` (ab22335 is
 - Missing work: the plan promised a concurrent-capacity test in the service tests, but none was written. Not added: a fake cannot prove the row lock; the lock is `SELECT … FOR UPDATE` in `src/db/event.db.js`.
 - Additions approved in the plan: 400 for an invalid id, and each event's `registrationId` for the signed-in member so the page knows what Cancel deletes. Kept.
 - Dependencies: none added; `package.json` only got the `db:migrate` and `test` scripts I asked for.
+
+
+## 2026-11-27 · Exercise 4: code part (Copilot)
+- Goal: environment check, /health and error handling, Dockerfile, coverage gate and UI fixes for docs/UI.md
+- Delegated: listing every environment variable; .env.example; a startup check for DATABASE_URL and SESSION_SECRET; trust proxy and a secure cookie in production; /health, the 404 and the error handler; Dockerfile and .dockerignore; the coverage script and the tests to reach it; CSS tokens, focus, contrast, labels, 44 px targets and dark mode
+- Checkpoints:
+  - SESSION_SECRET= npm start stopped with "missing SESSION_SECRET: see .env.example"
+  - npm test pass 109, fail 0; npm run coverage: services 100% lines, functions and branches, all of src 85.57% lines; no existing assertion removed
+  - the image built; the first docker run failed with ENOTFOUND host.docker.internal (that name does not exist in Codespaces); with --network host /health answered ok
+  - without .env, mcp-server/check.mjs still passed 12/12, so the "not found" notice of --env-file-if-exists goes to stderr
+  - coverage gate: test.skip on the AC-1 service test gave "99.56% line coverage does not meet threshold of 100%"; pushed as "coverage gate, broken on purpose" and the CI coverage job was red (run #10); restored, pushed as "coverage gate" and every CI job was green (run #11)
+- Went wrong: the agent claimed PUBLIC_BASE_URL and the Google client variables were unused and removed them from .env.example, which made checks/ex2.mjs and the CI spec job fail; it also edited docs/UI.md and ticked items it had not checked in a browser. Both were reverted on my instruction
+- Changed by hand: reverted docs/UI.md; approved removing the unused dotenv dependency after the agent asked first
