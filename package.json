@@ -7,11 +7,12 @@
     "doc": "docs"
   },
   "scripts": {
-    "start": "node src/server.js",
+    "start": "node --env-file-if-exists=.env src/server.js",
     "test": "node --test",
-    "db:setup": "node src/db/setup.js",
-    "db:migrate": "node src/db/migrate.js",
-    "mcp": "node mcp-server/server.js"
+    "coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/services/**\" --test-coverage-lines=100 --test-coverage-functions=100 --test-coverage-branches=100 test/services/*.test.js && node --test --experimental-test-coverage --test-coverage-include=\"src/**\" --test-coverage-lines=80",
+    "db:setup": "node --env-file-if-exists=.env src/db/setup.js",
+    "db:migrate": "node --env-file-if-exists=.env src/db/migrate.js",
+    "mcp": "node --env-file-if-exists=.env mcp-server/server.js"
   },
   "repository": {
     "type": "git",
@@ -26,7 +27,6 @@
   "homepage": "https://github.com/RadostinPavlov/webdev-121326045#readme",
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
-    "dotenv": "^18.0.10",
     "express": "^5.3.0",
     "express-session": "^1.19.0",
     "pg": "^8.23.1"

@@ -25,7 +25,10 @@ function createHarness({
     attendees = [],
     eventService: injectedEventService,
     modelAssistanceService: injectedModelAssistanceService,
-    authService: injectedAuthService
+    authService: injectedAuthService,
+    healthCheck = async () => {},
+    production = false,
+    sessionStore = new session.MemoryStore()
 } = {}) {
     const eventRows = new Map(events.map((event) => [event.id, { ...event }]));
     const registrationRows = registrations.map((registration) => ({ ...registration }));
@@ -88,9 +91,11 @@ function createHarness({
         }
     });
     const service = injectedEventService ?? defaultService;
-    const store = new session.MemoryStore();
+    const store = sessionStore;
     const app = createApp({
         eventService: service,
+        healthCheck,
+        production,
         ...(injectedModelAssistanceService
             ? { modelAssistanceService: injectedModelAssistanceService }
             : {}),
@@ -108,6 +113,7 @@ function createHarness({
     return {
         eventRows,
         registrationRows,
+        app,
         server,
         async start() {
             if (!baseUrlPromise) {
@@ -894,5 +900,102 @@ test('AC-7 signup creates an account and maps an existing email to 409', async (
         assert.deepEqual(await duplicateResponse.json(), {
             error: 'Email is already registered'
         });
+    });
+});
+
+test('GET /health reports database success and failure with matching status codes', async (t) => {
+    await withHarness(t, {}, async (harness) => {
+        const healthy = await request(harness, '/health');
+        assert.equal(healthy.status, 200);
+        assert.deepEqual(await healthy.json(), { status: 'ok', db: 'ok' });
+    });
+
+    await withHarness(t, {
+        healthCheck: async () => {
+            throw new Error('database unavailable');
+        },
+        sessionStore: Object.assign(new session.MemoryStore(), {
+            get(_sessionId, callback) {
+                callback(new Error('session store unavailable'));
+            }
+        })
+    }, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 100 });
+        const unhealthy = await request(harness, '/health', {
+            headers: { Cookie: cookie }
+        });
+        assert.equal(unhealthy.status, 503);
+        assert.deepEqual(await unhealthy.json(), { status: 'error', db: 'down' });
+    });
+});
+
+test('malformed JSON returns a one-sentence 400 without exposing a stack trace', async (t) => {
+    await withHarness(t, {}, async (harness) => {
+        const response = await request(harness, '/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{'
+        });
+
+        assert.equal(response.status, 400);
+        const body = await response.json();
+        assert.deepEqual(body, { error: 'Request body must be valid JSON.' });
+        assert.equal(body.error.includes('\n'), false);
+        assert.equal(JSON.stringify(body).includes('SyntaxError'), false);
+    });
+});
+
+test('unknown paths return a one-line 404', async (t) => {
+    await withHarness(t, {}, async (harness) => {
+        const response = await request(harness, '/missing-route');
+
+        assert.equal(response.status, 404);
+        assert.equal(await response.text(), 'Not found\n');
+    });
+});
+
+test('unexpected route errors are logged in full and return a one-sentence 500', async (t) => {
+    const failure = new Error('unexpected service failure');
+    const logged = [];
+    t.mock.method(console, 'error', (...args) => logged.push(args));
+    const eventService = {
+        async listUpcomingEvents() {
+            throw failure;
+        }
+    };
+
+    await withHarness(t, { eventService }, async (harness) => {
+        const cookie = await harness.cookieFor({ id: 100 });
+        const response = await request(harness, '/api/events', {
+            headers: { Cookie: cookie }
+        });
+
+        assert.equal(response.status, 500);
+        const body = await response.json();
+        assert.deepEqual(body, { error: 'An unexpected error occurred.' });
+        assert.equal(body.error.includes('\n'), false);
+        assert.equal(JSON.stringify(body).includes('unexpected service failure'), false);
+        assert.equal(logged[0][0], failure);
+    });
+});
+
+test('production trusts one proxy and emits a secure session cookie', async (t) => {
+    const authService = {
+        async login() {
+            return { id: 501, email: 'member@example.com', role: 'member' };
+        }
+    };
+    await withHarness(t, { authService, production: true }, async (harness) => {
+        assert.equal(harness.app.get('trust proxy'), 1);
+        const response = await request(harness, '/api/auth/login', {
+            ...jsonOptions('POST', null, { email: 'member@example.com', password: 'pass' }),
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Forwarded-Proto': 'https'
+            }
+        });
+
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('set-cookie'), /;\s*Secure(?:;|$)/i);
     });
 });

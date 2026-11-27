@@ -95,6 +95,23 @@ test('AC-4 organizer UI posts event details and shows the created event', async 
     assert.match(ui.eventsHtml, /Member workshop/);
 });
 
+test('organizer form labels every input and identifies the description as a suggestion', () => {
+    const html = OrganizerView.render({
+        visible: true,
+        assistant: OrganizerView.createAssistantState()
+    });
+    const inputIds = [...html.matchAll(/<input\b[^>]*\bid="([^"]+)"/g)]
+        .map((match) => match[1]);
+
+    for (const id of inputIds) {
+        assert.match(html, new RegExp(`<label\\s+for="${id}"`));
+    }
+    assert.match(
+        html,
+        /Description suggestion \(AI-assisted; review and edit before creating\)/
+    );
+});
+
 test('AC-5 attendee view shows loading, empty and error states for owned events only', async () => {
     const ownerEvent = {
         id: 5,

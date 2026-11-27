@@ -153,7 +153,7 @@
                 <input id="eventAudience" name="audience" type="text" value="${escapeHtml(form.audience)}">
                 <label for="eventNotes">Notes</label>
                 <textarea id="eventNotes" name="notes">${escapeHtml(form.notes)}</textarea>
-                <label for="eventDescription">Description</label>
+                <label for="eventDescription">Description suggestion (AI-assisted; review and edit before creating)</label>
                 <textarea id="eventDescription" name="description">${escapeHtml(form.description)}</textarea>
                 <button type="button" data-action="suggest-description"${assistant.description.status === 'loading' ? ' disabled' : ''}>
                     ${assistant.description.status === 'loading' ? 'Suggesting description...' : 'Suggest description'}

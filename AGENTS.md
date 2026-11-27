@@ -13,7 +13,7 @@ ClubEvents is a web app for club members to discover events, register for or can
 - Test: npm test
 - Database migrations: npm run db:migrate
 - Database setup (migrates, then truncates and reseeds): npm run db:setup
-- Coverage:
+- Coverage: `npm run coverage`
 - MCP server: npm run --silent mcp
 
 ## Conventions
@@ -33,7 +33,7 @@ that talks to the database directly is a second, unguarded way into your data: n
 
 ## The model feature
 <!-- Provider, env var, and the call site. -->
-- The provider is named in exactly one file:
+- The provider client is `src/lib/model-client.js`:
 - The key comes from an environment variable and is never committed or logged.
 - Every call has a timeout and a deterministic fallback, so the app still works when the provider is down or rate-limited.
 - The model's output is re-checked against real data before anything is saved or shown.

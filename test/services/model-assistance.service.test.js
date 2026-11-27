@@ -90,7 +90,10 @@ test('AC-21 description draft falls back for missing key, timeout, rate limit, a
         { textError: new ModelUnavailableError('timeout') },
         { textError: new ModelUnavailableError('rate_limited') },
         { textResult: '' },
-        { textResult: 'x'.repeat(1001) }
+        { textResult: 'x'.repeat(1001) },
+        { textResult: '<b>untrusted markup</b>' },
+        { textResult: '```untrusted code```' },
+        { textResult: 42 }
     ];
 
     for (const options of cases) {
@@ -104,6 +107,17 @@ test('AC-21 description draft falls back for missing key, timeout, rate limit, a
         assert.match(result.description, /Club Hall/);
         assert.equal(calls.length, 1);
     }
+});
+
+test('description fallback fills missing details with a deterministic template', async () => {
+    const { client } = createFakeClient({ textError: new ModelUnavailableError('network') });
+    const service = createModelAssistanceService({ client });
+
+    assert.deepEqual(await service.draftDescription(organizer, {}), {
+        description: 'Join us for our upcoming event.',
+        source: 'fallback',
+        message: 'Suggested without the model'
+    });
 });
 
 test('AC-22 poster extraction returns editable structured fields from a PNG', async () => {
@@ -128,12 +142,25 @@ test('AC-22 poster extraction returns editable structured fields from a PNG', as
         data: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString('base64')
     };
     assert.equal((await service.extractFromPoster(organizer, jpeg)).source, 'model');
+
+    for (const byteLength of [8, 10]) {
+        const paddedPng = {
+            mimeType: 'image/png',
+            data: Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0]
+                .slice(0, byteLength)).toString('base64')
+        };
+        assert.equal((await service.extractFromPoster(organizer, paddedPng)).source, 'model');
+    }
 });
 
 test('AC-22 poster extraction rejects non-PNG/JPEG and images larger than 4 MB', async () => {
     const { client, calls } = createFakeClient();
     const service = createModelAssistanceService({ client });
     const invalidImages = [
+        undefined,
+        { mimeType: 'image/png' },
+        { mimeType: 'image/png', data: '' },
+        { mimeType: 'image/png', data: 'abc' },
         { mimeType: 'image/gif', data: 'R0lGODlh' },
         { mimeType: 'image/png', data: '!!!!' },
         { mimeType: 'image/png', data: Buffer.from('not a PNG').toString('base64') },
@@ -180,7 +207,7 @@ test('AC-22 poster extraction returns empty fields when the key is missing, time
 });
 
 test('AC-23 past or impossible dates and invalid capacities stay empty for manual entry', async () => {
-    for (const date of ['2000-02-28', '2099-02-31']) {
+    for (const date of ['2000-02-28', '2099-02-31', 'next-week']) {
         const { client } = createFakeClient({
             jsonResult: JSON.stringify({
                 title: 'Open Day',
@@ -200,6 +227,31 @@ test('AC-23 past or impossible dates and invalid capacities stay empty for manua
         assert.equal(result.message, 'Please fill in the date and capacity by hand.');
         assert.equal(result.source, 'model');
     }
+});
+
+test('poster extraction accepts object responses and clears overlong or malformed fields', async () => {
+    const { client } = createFakeClient({
+        jsonResult: {
+            title: 'T'.repeat(201),
+            date: '2099-06-12',
+            time: '25:00',
+            venue: 'V'.repeat(201),
+            capacity: Number.MAX_SAFE_INTEGER + 1
+        }
+    });
+    const service = createModelAssistanceService({ client });
+
+    const result = await service.extractFromPoster(organizer, validPng());
+
+    assert.equal(result.title, '');
+    assert.equal(result.date, '2099-06-12');
+    assert.equal(result.time, '');
+    assert.equal(result.venue, '');
+    assert.equal(result.capacity, '');
+    assert.equal(
+        result.message,
+        'Please fill in the title and time and venue and capacity by hand.'
+    );
 });
 
 test('AC-24 model assistance rejects non-organizers before contacting the client', async () => {

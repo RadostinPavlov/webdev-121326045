@@ -6,6 +6,32 @@ const {
     createTokenService
 } = require('../../src/services/auth.service');
 
+test('login returns only a valid user and rejects missing users or incorrect passwords', async () => {
+    const existing = {
+        id: 10,
+        email: 'member@example.com',
+        role: 'member',
+        password_hash: 'stored-hash'
+    };
+    const service = createAuthService({
+        async findUserByEmail(email) {
+            return email === existing.email ? existing : null;
+        }
+    }, {
+        async verifyPassword(password, hash) {
+            return password === 'correct' && hash === existing.password_hash;
+        }
+    });
+
+    assert.deepEqual(await service.login('member@example.com', 'correct'), {
+        id: 10,
+        email: 'member@example.com',
+        role: 'member'
+    });
+    assert.equal(await service.login('member@example.com', 'incorrect'), null);
+    assert.equal(await service.login('missing@example.com', 'correct'), null);
+});
+
 test('AC-7 signup creates a member with a password hash, never the plaintext password', async () => {
     const createdUsers = [];
     const password = 'correct horse battery staple';

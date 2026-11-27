@@ -70,7 +70,7 @@
                 if (state.events.length === 0) {
                     return `${feedback}<p role="status">${emptyMessage}</p>`;
                 }
-                return `${feedback}${state.events.map(renderEvent).join('')}`;
+                return `${feedback}<div class="event-grid">${state.events.map(renderEvent).join('')}</div>`;
             default:
                 throw new TypeError(`Unsupported event view state: ${state.status}`);
         }

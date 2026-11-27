@@ -141,9 +141,11 @@ test('AC-4 createEvent rejects an empty title, invalid capacity, or non-future d
     };
 
     for (const input of [
+        null,
         { ...validInput, title: '   ' },
         { ...validInput, capacity: 0 },
         { ...validInput, capacity: 1.5 },
+        { ...validInput, date: 'not-a-date' },
         { ...validInput, date: new Date('2000-01-01T00:00:00.000Z') }
     ]) {
         await assert.rejects(
@@ -153,6 +155,14 @@ test('AC-4 createEvent rejects an empty title, invalid capacity, or non-future d
     }
 
     assert.deepEqual(events, []);
+
+    await service.createEvent(organizer, {
+        ...validInput,
+        description: 42,
+        venue: null
+    });
+    assert.equal(events[0].description, null);
+    assert.equal(events[0].venue, null);
 });
 
 test('AC-5 only the event organizer can list attendees; missing events are not found', async () => {
@@ -264,6 +274,17 @@ test('AC-14 cancelling another member registration is forbidden and keeps its ro
         'You are not allowed to cancel this registration'
     );
     assert.deepEqual(registrations, [registration]);
+});
+
+test('cancelling a registration that no longer exists returns REGISTRATION_NOT_FOUND', async () => {
+    const { service, registrations } = createFixture();
+
+    await assertServiceError(
+        service.cancelRegistration(999, 100),
+        'REGISTRATION_NOT_FOUND',
+        'Registration not found'
+    );
+    assert.deepEqual(registrations, []);
 });
 
 test('AC-16 registering for a missing event is not found and adds no row', async () => {

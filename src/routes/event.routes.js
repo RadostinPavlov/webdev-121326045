@@ -10,7 +10,7 @@ function parseId(value) {
     return Number.isSafeInteger(id) ? id : null;
 }
 
-function sendServiceError(res, error) {
+function sendServiceError(res, error, next) {
     const statusByCode = {
         VALIDATION_ERROR: 400,
         INVALID_IMAGE: 400,
@@ -26,8 +26,7 @@ function sendServiceError(res, error) {
     const status = statusByCode[error.code];
 
     if (!status) {
-        console.error('Event route error:', error);
-        return res.status(500).json({ error: 'Internal server error' });
+        return next(error);
     }
 
     return res.status(status).json({ error: error.message });
@@ -39,7 +38,7 @@ function createEventRouter(
 ) {
     const router = express.Router();
 
-    router.post('/description-draft', async (req, res) => {
+    router.post('/description-draft', async (req, res, next) => {
         if (!req.session.user) {
             return res.status(401).json({ error: 'Not signed in' });
         }
@@ -51,7 +50,7 @@ function createEventRouter(
             );
             return res.json(result);
         } catch (error) {
-            return sendServiceError(res, error);
+            return sendServiceError(res, error, next);
         }
     });
 
@@ -64,7 +63,7 @@ function createEventRouter(
             return next();
         },
         express.json({ limit: '6mb' }),
-        async (req, res) => {
+        async (req, res, next) => {
             try {
                 const result = await injectedModelAssistanceService.extractFromPoster(
                     req.session.user,
@@ -72,12 +71,12 @@ function createEventRouter(
                 );
                 return res.json(result);
             } catch (error) {
-                return sendServiceError(res, error);
+                return sendServiceError(res, error, next);
             }
         }
     );
 
-    router.get('/', async (req, res) => {
+    router.get('/', async (req, res, next) => {
         if (!req.session.user) {
             return res.status(401).json({ error: 'Not signed in' });
         }
@@ -86,11 +85,11 @@ function createEventRouter(
             const events = await eventService.listUpcomingEvents(req.session.user.id);
             return res.json(events);
         } catch (error) {
-            return sendServiceError(res, error);
+            return sendServiceError(res, error, next);
         }
     });
 
-    router.post('/', async (req, res) => {
+    router.post('/', async (req, res, next) => {
         if (!req.session.user) {
             return res.status(401).json({ error: 'Not signed in' });
         }
@@ -99,11 +98,11 @@ function createEventRouter(
             const event = await eventService.createEvent(req.session.user, req.body);
             return res.status(201).json(event);
         } catch (error) {
-            return sendServiceError(res, error);
+            return sendServiceError(res, error, next);
         }
     });
 
-    router.get('/:eventId/attendees', async (req, res) => {
+    router.get('/:eventId/attendees', async (req, res, next) => {
         if (!req.session.user) {
             return res.status(401).json({ error: 'Not signed in' });
         }
@@ -120,11 +119,11 @@ function createEventRouter(
             );
             return res.json(attendees);
         } catch (error) {
-            return sendServiceError(res, error);
+            return sendServiceError(res, error, next);
         }
     });
 
-    router.post('/:eventId/registrations', async (req, res) => {
+    router.post('/:eventId/registrations', async (req, res, next) => {
         if (!req.session.user) {
             return res.status(401).json({ error: 'Not signed in' });
         }
@@ -141,7 +140,7 @@ function createEventRouter(
             );
             return res.status(201).json(result);
         } catch (error) {
-            return sendServiceError(res, error);
+            return sendServiceError(res, error, next);
         }
     });
 
@@ -151,7 +150,7 @@ function createEventRouter(
 function createRegistrationRouter(eventService) {
     const router = express.Router();
 
-    router.delete('/:registrationId', async (req, res) => {
+    router.delete('/:registrationId', async (req, res, next) => {
         if (!req.session.user) {
             return res.status(401).json({ error: 'Not signed in' });
         }
@@ -168,7 +167,7 @@ function createRegistrationRouter(eventService) {
             );
             return res.json(result);
         } catch (error) {
-            return sendServiceError(res, error);
+            return sendServiceError(res, error, next);
         }
     });
 

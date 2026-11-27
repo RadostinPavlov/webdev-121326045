@@ -4,7 +4,7 @@ const authService = require('../services/auth.service');
 function createAuthRouter(injectedAuthService = authService) {
     const router = express.Router();
 
-    router.post('/login', async (req, res) => {
+    router.post('/login', async (req, res, next) => {
         const { email, password } = req.body;
 
         if (!email || !password) {
@@ -16,8 +16,7 @@ function createAuthRouter(injectedAuthService = authService) {
             if (user) {
                 return req.session.regenerate((err) => {
                     if (err) {
-                        console.error('Session regeneration error:', err);
-                        return res.status(500).json({ error: 'Internal server error' });
+                        return next(err);
                     }
                     req.session.user = user;
                     return res.json({ message: 'Logged in successfully', user });
@@ -25,12 +24,11 @@ function createAuthRouter(injectedAuthService = authService) {
             }
             return res.status(401).json({ error: 'Invalid email or password' });
         } catch (error) {
-            console.error('Login error:', error);
-            return res.status(500).json({ error: 'Internal server error' });
+            return next(error);
         }
     });
 
-    router.post('/signup', async (req, res) => {
+    router.post('/signup', async (req, res, next) => {
         const { email, password } = req.body;
         if (
             typeof email !== 'string' ||
@@ -48,16 +46,14 @@ function createAuthRouter(injectedAuthService = authService) {
             if (error.code === 'EMAIL_TAKEN') {
                 return res.status(409).json({ error: error.message });
             }
-            console.error('Signup error:', error);
-            return res.status(500).json({ error: 'Internal server error' });
+            return next(error);
         }
     });
 
-    router.post('/logout', (req, res) => {
+    router.post('/logout', (req, res, next) => {
         req.session.destroy((error) => {
             if (error) {
-                console.error('Logout error:', error);
-                return res.status(500).json({ error: 'Internal server error' });
+                return next(error);
             }
             res.clearCookie('connect.sid');
             return res.json({ message: 'Logged out successfully' });
